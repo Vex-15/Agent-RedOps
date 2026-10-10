@@ -10,6 +10,7 @@ multi-agent workflows. They break attack paths at specific trust boundaries:
 4. StrictEntityBindingGuard: Disallows cosmetic display name spoofing; binds strictly to canonical IDs.
 5. InstructionPrecedenceGuard: Ensures system policy supremacy over prompt/metadata instructions.
 6. CanonicalCreditLimitGuard: Re-validates purchases against canonical per-vendor credit limits.
+7. PayloadIntegrityGuard: Rejects malformed tool payloads at the boundary instead of crashing agents.
 """
 
 from __future__ import annotations
@@ -362,3 +363,63 @@ class CanonicalCreditLimitGuard:
             passed=True,
             reason="Purchase is within the canonical vendor credit limit.",
         ), event
+
+
+class PayloadIntegrityGuard:
+    """
+    Validates that a tool payload has the shape the pipeline expects.
+
+    A malformed payload (a bare string, an HTML error page, a list where
+    a record was promised) must fail closed at the trust boundary instead
+    of crashing whichever agent consumes it.
+    """
+    @staticmethod
+    def inspect_payload(
+        tool_name: str,
+        payload: Any,
+        agent: AgentRole = AgentRole.VENDOR_LOOKUP,
+    ) -> tuple[dict[str, Any], DefenseGuardReport, TraceEvent]:
+        if isinstance(payload, dict):
+            report = DefenseGuardReport(
+                guard_name="PayloadIntegrityGuard",
+                passed=True,
+                reason=f"{tool_name} payload has the expected shape.",
+            )
+            event = TraceEvent(
+                agent=agent,
+                kind=EventKind.POLICY_CHECK,
+                action="guard_verify_payload_shape",
+                input_data={"tool": tool_name},
+                output_data={"valid": True},
+                trusted=True,
+            )
+            return payload, report, event
+
+        sanitized: dict[str, Any] = {
+            "found": False,
+            "verified": False,
+            "_guard_intercepted": True,
+            "_payload_error": (
+                f"{tool_name} returned a malformed payload "
+                f"({type(payload).__name__})"
+            ),
+        }
+        report = DefenseGuardReport(
+            guard_name="PayloadIntegrityGuard",
+            passed=False,
+            reason=(
+                f"Malformed {tool_name} payload rejected at the trust "
+                f"boundary (got {type(payload).__name__}, expected dict)."
+            ),
+            details={"tool": tool_name, "payload_type": type(payload).__name__},
+        )
+        event = TraceEvent(
+            agent=agent,
+            kind=EventKind.POLICY_CHECK,
+            action="guard_reject_malformed_payload",
+            input_data={"tool": tool_name, "payload_type": type(payload).__name__},
+            output_data=sanitized,
+            trusted=True,
+            metadata={"defense_triggered": "PayloadIntegrityGuard", "blocked": True},
+        )
+        return sanitized, report, event

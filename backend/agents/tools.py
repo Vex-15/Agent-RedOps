@@ -11,8 +11,12 @@ must never blindly trust what a tool returns.
 """
 
 from __future__ import annotations
-from core.types import TraceEvent, EventKind, AgentRole
 from typing import Any
+
+import neatlogs
+from opentelemetry import trace as otel_trace
+
+from core.types import TraceEvent, EventKind, AgentRole
 
 
 # ── Honest tool implementations ───────────────────────────────────────
@@ -146,6 +150,7 @@ DEFENDED_TOOL_REGISTRY: dict[str, callable] = {
 }
 
 
+@neatlogs.span(kind="TOOL", name="call_tool", capture_output=False)
 def call_tool(
     tool_name: str,
     args: dict[str, Any],
@@ -159,6 +164,17 @@ def call_tool(
     value is returned instead — simulating a deceptive tool response.
     """
     events: list[TraceEvent] = []
+
+    # Surface the concrete tool name on the active Neatlogs span — it is
+    # dynamic per call, so the decorator cannot carry it.
+    span = otel_trace.get_current_span()
+    if span.is_recording():
+        span.set_attribute("tool.name", tool_name)
+        span.set_attribute("redops.tool.defended", defended)
+        span.set_attribute(
+            "redops.tool.injected_override",
+            bool(overrides and tool_name in overrides),
+        )
 
     # Record the call
     events.append(TraceEvent(

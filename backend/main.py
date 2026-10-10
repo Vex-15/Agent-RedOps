@@ -15,8 +15,10 @@ import sys, os, json, dataclasses
 from datetime import datetime
 from contextlib import asynccontextmanager
 
+from dotenv import load_dotenv
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 import database
@@ -27,11 +29,22 @@ from scenarios.runner import run_scenario
 from core.types import PipelineResult
 
 # ── Neatlogs ───────────────────────────────────────────────────────────
+# Load backend/.env (NEATLOGS_API_KEY) before init(); the key is never
+# committed. init() runs once at process startup — never per request. The
+# scenario pipeline is instrumented with manual @span()s (agent runs, tool
+# calls, guard checks, findings); this simulator makes no LLM calls, so
+# there are no token/cost metrics to report — spans carry real latency.
+NEATLOGS_WORKFLOW = "redops-scenario-eval"
+load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
+
 try:
     import neatlogs
+
     neatlogs.init(
-        workflow_name="redops",
-        instrumentations=["fastapi"],
+        api_key=os.environ.get("NEATLOGS_API_KEY"),
+        endpoint="https://ingest.neatlogs.com",
+        workflow_name=NEATLOGS_WORKFLOW,
+        capture_logs=True,
     )
     _neatlogs_ok = True
 except Exception as e:
@@ -43,10 +56,20 @@ except Exception as e:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Create tables and seed scenarios on startup
+    # Create tables, apply additive migrations, seed scenarios on startup
     models.Base.metadata.create_all(bind=database.engine)
+    _migrate_schema()
     _seed_scenarios()
     yield
+    # Long-running server: flush + shut down once at process exit (never
+    # per request) so batched spans are exported instead of dropped.
+    if _neatlogs_ok:
+        try:
+            import neatlogs
+            neatlogs.flush()
+            neatlogs.shutdown()
+        except Exception as e:
+            print(f"[redops] neatlogs shutdown skipped: {e}")
 
 
 app = FastAPI(title="RedOps API", version="0.2.0", lifespan=lifespan)
@@ -66,6 +89,16 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+# ── Schema migrations ──────────────────────────────────────────────────
+
+def _migrate_schema():
+    """Additive migrations for databases created before new columns existed."""
+    with database.engine.begin() as conn:
+        cols = {row[1] for row in conn.execute(text("PRAGMA table_info(runs)"))}
+        if "error" not in cols:
+            conn.execute(text("ALTER TABLE runs ADD COLUMN error TEXT DEFAULT ''"))
 
 
 # ── Seed built-in scenarios ───────────────────────────────────────────
@@ -138,6 +171,7 @@ def _save_run(db: Session, result: PipelineResult) -> models.RunRecord:
         attack_paths_json=serialized.get("attack_paths", []),
         defenses_json=serialized.get("defenses", []),
         latency_ms=result.latency_ms,
+        error=result.error,
         started_at=result.started_at,
         finished_at=result.finished_at,
     )
@@ -187,6 +221,7 @@ def list_runs(db: Session = Depends(get_db)):
             attack_path_count=len(attack_paths),
             defense_verdict=defense_verdict,
             latency_ms=r.latency_ms,
+            error=r.error or "",
             started_at=r.started_at or "",
             finished_at=r.finished_at or "",
         ))
@@ -244,6 +279,7 @@ def get_run_detail(run_id: str, db: Session = Depends(get_db)):
             for d in (rec.defenses_json or [])
         ],
         latency_ms=rec.latency_ms,
+        error=rec.error or "",
         started_at=rec.started_at or "",
         finished_at=rec.finished_at or "",
     )
@@ -345,7 +381,9 @@ def dashboard_metrics(db: Session = Depends(get_db)):
                 bypassed += 1
 
         # Determine outcome
-        if len(violations) == 0:
+        if (r.status or "").lower() == "failed":
+            outcome = "failed"
+        elif len(violations) == 0:
             outcome = "clean"
         elif defenses and all(d.get("verdict") == "blocked" for d in defenses):
             outcome = "defended"
@@ -371,5 +409,7 @@ def health():
     return {
         "status": "ok",
         "neatlogs": _neatlogs_ok,
+        "neatlogs_workflow": NEATLOGS_WORKFLOW if _neatlogs_ok else None,
+        "neatlogs_api_key_configured": bool(os.environ.get("NEATLOGS_API_KEY")),
         "version": "0.2.0",
     }

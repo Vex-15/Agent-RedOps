@@ -145,5 +145,6 @@ class PipelineResult:
     attack_paths: list[AttackPath] = field(default_factory=list)
     defenses: list[DefenseResult] = field(default_factory=list)
     latency_ms: int = 0
+    error: str = ""   # populated when status == FAILED
     started_at: str = ""
     finished_at: str = ""

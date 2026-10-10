@@ -35,6 +35,7 @@ class RunRecord(Base):
 
     # Metrics
     latency_ms = Column(Integer, default=0)
+    error = Column(String, default="")
 
     started_at = Column(String, default="")
     finished_at = Column(String, default="")

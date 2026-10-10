@@ -29,6 +29,7 @@ class RunSummary(BaseModel):
     attack_path_count: int
     defense_verdict: str | None
     latency_ms: int
+    error: str = ""
     started_at: str
     finished_at: str
 
@@ -92,6 +93,7 @@ class RunDetail(BaseModel):
     attack_paths: list[AttackPathOut]
     defenses: list[DefenseResultOut]
     latency_ms: int
+    error: str = ""
     started_at: str
     finished_at: str
 

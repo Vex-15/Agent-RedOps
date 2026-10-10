@@ -22,6 +22,8 @@ from __future__ import annotations
 from typing import Any
 import uuid
 
+import neatlogs
+
 from core.types import AgentRole, EventKind, TraceEvent, Severity, PolicyViolation, ViolationCategory
 from agents.tools import call_tool, APPROVAL_LEDGER, VENDOR_CATALOG
 from agents.guards import (
@@ -30,11 +32,21 @@ from agents.guards import (
     StrictBudgetGuard,
     CryptographicLedgerGuard,
     CanonicalCreditLimitGuard,
+    PayloadIntegrityGuard,
 )
+
+
+class PipelineError(RuntimeError):
+    """An agent crashed mid-run; carries the partial trace collected so far."""
+
+    def __init__(self, message: str, trace: list[TraceEvent]):
+        super().__init__(message)
+        self.trace = trace
 
 
 # ── Agent: Requester ───────────────────────────────────────────────────
 
+@neatlogs.span(kind="AGENT", name="agent_requester", role="requester", goal="Initiate a procurement request")
 def agent_requester(
     request: dict[str, Any],
     overrides: dict | None = None,
@@ -74,6 +86,7 @@ def agent_requester(
 
 # ── Agent: Vendor Lookup ───────────────────────────────────────────────
 
+@neatlogs.span(kind="AGENT", name="agent_vendor_lookup", role="vendor_lookup", goal="Resolve vendor details via the vendor_lookup tool")
 def agent_vendor_lookup(
     request: dict[str, Any],
     overrides: dict | None = None,
@@ -97,6 +110,13 @@ def agent_vendor_lookup(
     events.extend(tool_events)
 
     if defended:
+        # Guard 0: reject malformed payloads at the boundary (fail closed
+        # instead of crashing the agents that consume the response)
+        vendor_info, shape_report, shape_event = PayloadIntegrityGuard.inspect_payload(
+            "vendor_lookup", vendor_info, agent=AgentRole.VENDOR_LOOKUP
+        )
+        events.append(shape_event)
+
         # Guard 1: Enforce canonical entity binding (neutralize display name spoofing)
         vendor_info, ident_report, ident_event = StrictEntityBindingGuard.inspect_identity(
             vendor_id, vendor_info
@@ -137,6 +157,7 @@ def agent_vendor_lookup(
 
 # ── Agent: Approver ────────────────────────────────────────────────────
 
+@neatlogs.span(kind="AGENT", name="agent_approver", role="approver", goal="Apply multi-tier approval policy")
 def agent_approver(
     request: dict[str, Any],
     overrides: dict | None = None,
@@ -278,6 +299,7 @@ def agent_approver(
 
 # ── Agent: Purchaser ───────────────────────────────────────────────────
 
+@neatlogs.span(kind="AGENT", name="agent_purchaser", role="purchaser", goal="Execute the approved purchase")
 def agent_purchaser(
     request: dict[str, Any],
     overrides: dict | None = None,
@@ -381,6 +403,7 @@ def agent_purchaser(
 
 # ── Agent: Auditor ─────────────────────────────────────────────────────
 
+@neatlogs.span(kind="AGENT", name="agent_auditor", role="auditor", goal="Post-execution compliance review")
 def agent_auditor(
     request: dict[str, Any],
     overrides: dict | None = None,
@@ -453,24 +476,40 @@ def run_procurement_pipeline(
     """
     all_events: list[TraceEvent] = []
 
-    # Stage 1: Requester
-    request, events = agent_requester(request, overrides=tool_overrides, defended=defended)
-    all_events.extend(events)
+    try:
+        # Stage 1: Requester
+        request, events = agent_requester(request, overrides=tool_overrides, defended=defended)
+        all_events.extend(events)
 
-    # Stage 2: Vendor Lookup
-    request, events = agent_vendor_lookup(request, overrides=tool_overrides, defended=defended)
-    all_events.extend(events)
+        # Stage 2: Vendor Lookup
+        request, events = agent_vendor_lookup(request, overrides=tool_overrides, defended=defended)
+        all_events.extend(events)
 
-    # Stage 3: Approver
-    request, events = agent_approver(request, overrides=tool_overrides, defended=defended)
-    all_events.extend(events)
+        # Stage 3: Approver
+        request, events = agent_approver(request, overrides=tool_overrides, defended=defended)
+        all_events.extend(events)
 
-    # Stage 4: Purchaser
-    request, events = agent_purchaser(request, overrides=tool_overrides, defended=defended)
-    all_events.extend(events)
+        # Stage 4: Purchaser
+        request, events = agent_purchaser(request, overrides=tool_overrides, defended=defended)
+        all_events.extend(events)
 
-    # Stage 5: Auditor (post-execution review)
-    request, events = agent_auditor(request, overrides=tool_overrides, defended=defended)
-    all_events.extend(events)
+        # Stage 5: Auditor (post-execution review)
+        request, events = agent_auditor(request, overrides=tool_overrides, defended=defended)
+        all_events.extend(events)
+    except PipelineError:
+        raise
+    except Exception as exc:
+        # An agent crashed mid-run (e.g. it consumed a malformed tool
+        # payload). Record the error in the trace and surface it as a
+        # PipelineError carrying everything collected so far, so the run
+        # reports a failure instead of a bare 500.
+        all_events.append(TraceEvent(
+            kind=EventKind.ERROR,
+            action="pipeline_error",
+            output_data={"error": str(exc), "error_type": type(exc).__name__},
+            trusted=True,
+            metadata={"stage_crashed": True},
+        ))
+        raise PipelineError(f"{type(exc).__name__}: {exc}", all_events) from exc
 
     return request, all_events
