@@ -107,6 +107,14 @@ def _serialize_dataclass(obj):
         for f in dataclasses.fields(obj):
             val = getattr(obj, f.name)
             d[f.name] = _serialize_dataclass(val)
+        # Serialize plain properties too (e.g. AttackPath.length).
+        for name in ('length',):
+            prop = getattr(type(obj), name, None)
+            if isinstance(prop, property):
+                try:
+                    d[name] = getattr(obj, name)
+                except Exception:
+                    pass
         return d
     elif isinstance(obj, list):
         return [_serialize_dataclass(i) for i in obj]
@@ -199,12 +207,22 @@ def get_run_detail(run_id: str, db: Session = Depends(get_db)):
         run_id=rec.run_id,
         scenario_name=rec.scenario_name,
         status=rec.status,
-        trace=[schemas.TraceEventOut(**e) for e in (rec.trace_json or [])],
+        trace=[
+            schemas.TraceEventOut(
+                **{k: v for k, v in e.items() if k in set(schemas.TraceEventOut.model_fields) },
+            )
+            for e in (rec.trace_json or [])
+        ],
         violations=[schemas.ViolationOut(**v) for v in (rec.violations_json or [])],
         attack_paths=[
             schemas.AttackPathOut(
                 **{k: v for k, v in ap.items() if k != "events" and k != "violation"},
-                events=[schemas.TraceEventOut(**e) for e in ap.get("events", [])],
+                events=[
+                    schemas.TraceEventOut(
+                        **{k: v for k, v in e.items() if k in set(schemas.TraceEventOut.model_fields)},
+                    )
+                    for e in ap.get("events", [])
+                ],
                 violation=schemas.ViolationOut(**ap["violation"]) if ap.get("violation") else None,
             )
             for ap in (rec.attack_paths_json or [])

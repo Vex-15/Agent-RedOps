@@ -43,6 +43,7 @@ class TraceEventOut(BaseModel):
     output_data: dict[str, Any]
     metadata: dict[str, Any]
     trusted: bool
+    unverified_source: bool = False
 
 
 class ViolationOut(BaseModel):
