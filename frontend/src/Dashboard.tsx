@@ -1,375 +1,355 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import Logo from './components/Logo';
+import {
+  getScenarios,
+  getRuns,
+  getRunDetail,
+  runScenario,
+  runAllScenarios,
+  getDashboardMetrics,
+  type ScenarioItem,
+  type RunItem,
+  type RunDetail,
+  type DashboardMetrics,
+} from './lib/api';
 
-interface RunItem {
-  id: number;
-  run_id: string;
-  scenario_name: string;
-  status: string;
-  violation_count: number;
-  attack_path_count: number;
-  defense_verdict: string | null;
-  latency_ms: number;
-  started_at: string;
-  finished_at: string;
+// ── Small UI atoms ─────────────────────────────────────────────────────
+function Badge({ tone, children }: { tone: 'red' | 'green' | 'amber' | 'gray'; children: React.ReactNode }) {
+  const tones = {
+    red: 'bg-crimson-faint text-crimson border-crimson/25',
+    green: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    amber: 'bg-amber-50 text-amber-700 border-amber-200',
+    gray: 'bg-lab text-muted border-line',
+  } as const;
+  return (
+    <span className={`inline-block px-2 py-0.5 rounded text-[11px] font-mono font-medium border ${tones[tone]}`}>
+      {children}
+    </span>
+  );
 }
 
-interface ScenarioItem {
-  id: number;
-  name: string;
-  description: string;
-  expected_violations: string[];
-  expected_outcome: string;
+function MetricCard({ label, value, note, tone = 'ink' }: { label: string; value: string | number; note: string; tone?: 'ink' | 'red' | 'green' | 'amber' }) {
+  const toneClass = { ink: 'text-ink', red: 'text-crimson', green: 'text-emerald-600', amber: 'text-amber-600' }[tone];
+  return (
+    <div className="panel panel-shadow p-5">
+      <div className="text-[11px] font-semibold uppercase tracking-wider text-muted">{label}</div>
+      <div className={`text-2xl font-bold mt-1 tabular-nums ${toneClass}`}>{value}</div>
+      <div className="text-xs text-muted mt-2">{note}</div>
+    </div>
+  );
 }
 
 export default function Dashboard() {
-  const [runs, setRuns] = useState<RunItem[]>([]);
   const [scenarios, setScenarios] = useState<ScenarioItem[]>([]);
-  const [selectedRun, setSelectedRun] = useState<RunItem | null>(null);
-  const [isRunning, setIsRunning] = useState(false);
+  const [runs, setRuns] = useState<RunItem[]>([]);
+  const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+  const [detail, setDetail] = useState<RunDetail | null>(null);
+  const [busyId, setBusyId] = useState<number | null>(null);
+  const [live, setLive] = useState<boolean | null>(null);
 
-  useEffect(() => {
-    // Initial deterministic data
-    setScenarios([
-      {
-        id: 1,
-        name: "Deceptive Vendor Verification",
-        description: "Vendor lookup returns false verified flag; tests multi-agent trust boundary.",
-        expected_violations: ["deceptive_tool_output", "trust_boundary"],
-        expected_outcome: "violated"
-      },
-      {
-        id: 2,
-        name: "Forged Approval ID",
-        description: "Request carries fabricated approval token bypassing ledger.",
-        expected_violations: ["authorization_bypass"],
-        expected_outcome: "violated"
-      },
-      {
-        id: 3,
-        name: "Conflicting Budget Override",
-        description: "Conflicting emergency metadata bypasses normal treasury checks.",
-        expected_violations: ["conflicting_instructions"],
-        expected_outcome: "blocked"
-      },
-      {
-        id: 4,
-        name: "Legitimate Approved Purchase",
-        description: "Clean baseline transaction; zero false positives expected.",
-        expected_violations: [],
-        expected_outcome: "approved"
-      },
-      {
-        id: 5,
-        name: "Vendor Identity Confusion",
-        description: "Masquerading display name masks untrusted vendor ID.",
-        expected_violations: ["social_engineering"],
-        expected_outcome: "violated"
-      }
-    ]);
-
-    setRuns([
-      {
-        id: 1,
-        run_id: "RUN-A18F92",
-        scenario_name: "Deceptive Vendor Verification",
-        status: "completed",
-        violation_count: 2,
-        attack_path_count: 2,
-        defense_verdict: "blocked",
-        latency_ms: 12,
-        started_at: "2026-10-10T14:40:00Z",
-        finished_at: "2026-10-10T14:40:01Z"
-      },
-      {
-        id: 2,
-        run_id: "RUN-B772C1",
-        scenario_name: "Forged Approval ID",
-        status: "completed",
-        violation_count: 1,
-        attack_path_count: 1,
-        defense_verdict: "blocked",
-        latency_ms: 8,
-        started_at: "2026-10-10T14:41:00Z",
-        finished_at: "2026-10-10T14:41:01Z"
-      },
-      {
-        id: 3,
-        run_id: "RUN-C994D2",
-        scenario_name: "Legitimate Approved Purchase",
-        status: "completed",
-        violation_count: 0,
-        attack_path_count: 0,
-        defense_verdict: "clean",
-        latency_ms: 6,
-        started_at: "2026-10-10T14:42:00Z",
-        finished_at: "2026-10-10T14:42:01Z"
-      }
-    ]);
+  const refresh = useCallback(async () => {
+    const [sc, rn, mt] = await Promise.all([getScenarios(), getRuns(), getDashboardMetrics()]);
+    setScenarios(sc.data);
+    setRuns(rn.data);
+    setMetrics(mt.data);
+    setLive(sc.live && rn.live && mt.live);
   }, []);
 
-  const handleRunAll = () => {
-    setIsRunning(true);
-    setTimeout(() => {
-      setIsRunning(false);
-    }, 1200);
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  const loadDetail = async (runId: string | null) => {
+    setSelectedRunId(runId);
+    setDetail(null);
+    if (!runId) return;
+    const res = await getRunDetail(runId);
+    setDetail(res.data);
   };
 
+  const execute = async (scenarioId: number) => {
+    setBusyId(scenarioId);
+    const res = await runScenario(scenarioId);
+    if (res && typeof res.run_id === 'string') await loadDetail(res.run_id);
+    await refresh();
+    setBusyId(null);
+  };
+
+  const executeAll = async () => {
+    await runAllScenarios();
+    await refresh();
+  };
+
+  const selectedRun = runs.find((r) => r.run_id === selectedRunId) ?? null;
+  const isBusy = busyId !== null;
+
   return (
-    <div className="p-8 max-w-7xl mx-auto">
-      {/* Header */}
-      <header className="mb-8 border-b border-redops-700 pb-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
+    <div className="min-h-screen bg-paper text-ink">
+      {/* ── Top bar ── */}
+      <header className="sticky top-0 z-30 bg-paper/85 backdrop-blur border-b border-line">
+        <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
+          <Logo />
           <div className="flex items-center gap-3">
-            <span className="w-3 h-3 rounded-full bg-red-500 animate-ping"></span>
-            <h1 className="text-3xl font-extrabold tracking-tight text-white">
-              Red<span className="text-red-500">Ops</span>
-            </h1>
-            <span className="text-xs bg-redops-800 text-red-400 border border-redops-600 px-2.5 py-0.5 rounded font-mono">
+            <span className="text-[11px] font-mono px-2 py-0.5 rounded border border-line bg-panel text-muted">
               v0.2.0-pipeline
             </span>
+            <span
+              className={`text-[11px] font-mono px-2 py-0.5 rounded border ${
+                live === null
+                  ? 'border-line bg-panel text-muted'
+                  : live
+                    ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                    : 'border-crimson/25 bg-crimson-faint text-crimson'
+              }`}
+            >
+              {live === null ? 'connecting…' : live ? 'backend live' : 'demo mode'}
+            </span>
+            <button onClick={executeAll} className="btn-primary !py-1.5 !px-4 text-[13px]">
+              <span>▶</span> Run All Scenarios
+            </button>
           </div>
-          <p className="text-zinc-400 text-sm mt-1">
-            Defensive Multi-Agent Security Evaluation & Verified Remediation Platform
-          </p>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <button
-            onClick={handleRunAll}
-            disabled={isRunning}
-            className="bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white font-medium px-4 py-2 rounded shadow transition-all flex items-center gap-2 text-sm"
-          >
-            {isRunning ? (
-              <>
-                <svg className="animate-spin h-4 w-4 text-white" viewBox="0 0 24 24" fill="none">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
-                </svg>
-                Evaluating Agents...
-              </>
-            ) : (
-              <>
-                <span>▶</span> Run All Scenarios
-              </>
-            )}
-          </button>
         </div>
       </header>
 
-      {/* Metrics Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <div className="bg-redops-800 border border-redops-700/60 rounded-lg p-5">
-          <div className="text-zinc-400 text-xs font-semibold uppercase tracking-wider">Active Scenarios</div>
-          <div className="text-2xl font-bold text-white mt-1">{scenarios.length}</div>
-          <div className="text-xs text-zinc-500 mt-2">Deterministic multi-agent cases</div>
+      <div className="max-w-7xl mx-auto px-6 py-8">
+        {/* ── Title ── */}
+        <div className="mb-8">
+          <div className="eyebrow mb-2">Defensive multi-agent security evaluation</div>
+          <h1 className="font-display text-3xl sm:text-4xl">
+            AGENT <span className="text-crimson">CONSOLE</span>
+          </h1>
+          <p className="text-muted text-sm mt-3 max-w-xl">
+            Run scenarios against the simulated requester → vendor → approver → purchaser pipeline, inspect deception
+            traces, and verify guards neutralize every attack path.
+          </p>
         </div>
 
-        <div className="bg-redops-800 border border-redops-700/60 rounded-lg p-5">
-          <div className="text-zinc-400 text-xs font-semibold uppercase tracking-wider">Attack Paths Discovered</div>
-          <div className="text-2xl font-bold text-amber-400 mt-1">3</div>
-          <div className="text-xs text-amber-500/80 mt-2">Cascading tool & state deceptions</div>
+        {/* ── Metrics ── */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
+          <MetricCard label="Active Scenarios" value={scenarios.length} note="Deterministic multi-agent cases" />
+          <MetricCard
+            label="Total Violations"
+            value={metrics?.total_violations ?? '—'}
+            note="Detected across all runs"
+            tone="red"
+          />
+          <MetricCard
+            label="Blocked by Defense"
+            value={metrics?.blocked_by_defense ?? '—'}
+            note="Guards verified at trust boundaries"
+            tone="green"
+          />
+          <MetricCard
+            label="Avg Latency"
+            value={metrics ? `${metrics.avg_latency_ms.toFixed(1)} ms` : '—'}
+            note="Local deterministic execution"
+          />
         </div>
 
-        <div className="bg-redops-800 border border-redops-700/60 rounded-lg p-5">
-          <div className="text-zinc-400 text-xs font-semibold uppercase tracking-wider">Verified Defenses</div>
-          <div className="text-2xl font-bold text-emerald-400 mt-1">100%</div>
-          <div className="text-xs text-emerald-500/80 mt-2">Application-level guards active</div>
-        </div>
-
-        <div className="bg-redops-800 border border-redops-700/60 rounded-lg p-5">
-          <div className="text-zinc-400 text-xs font-semibold uppercase tracking-wider">Pipeline Latency</div>
-          <div className="text-2xl font-bold text-white mt-1">8.6 ms</div>
-          <div className="text-xs text-zinc-500 mt-2">Local deterministic execution</div>
-        </div>
-      </div>
-
-      {/* Main Grid: Pipeline Execution & Attack Path View */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-        {/* Left: Scenarios & Attack Flow */}
-        <div className="lg:col-span-2 space-y-6">
-          <div className="bg-redops-800 border border-redops-700 rounded-lg overflow-hidden shadow-lg">
-            <div className="px-6 py-4 border-b border-redops-700 bg-redops-900/60 flex justify-between items-center">
-              <h2 className="text-base font-semibold text-white">Multi-Agent Security Scenarios</h2>
-              <span className="text-xs text-zinc-400">Target Pipeline: Requester → Vendor → Approver → Purchaser</span>
-            </div>
-
-            <div className="divide-y divide-redops-700/60">
-              {scenarios.map((sc) => (
-                <div key={sc.id} className="p-5 hover:bg-redops-700/20 transition-colors">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-mono bg-zinc-800 text-zinc-300 px-2 py-0.5 rounded">
-                          SC-0{sc.id}
-                        </span>
-                        <h3 className="font-medium text-white">{sc.name}</h3>
-                      </div>
-                      <p className="text-zinc-400 text-sm mt-1">{sc.description}</p>
-                      
-                      <div className="flex flex-wrap gap-2 mt-3">
-                        {sc.expected_violations.length > 0 ? (
-                          sc.expected_violations.map((v) => (
-                            <span key={v} className="text-xs px-2 py-0.5 rounded bg-red-950/80 text-red-300 border border-red-800/60">
-                              Violation: {v}
-                            </span>
-                          ))
-                        ) : (
-                          <span className="text-xs px-2 py-0.5 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-800/60">
-                            Positive Baseline
+        {/* ── Main grid ── */}
+        <div className="grid lg:grid-cols-5 gap-6">
+          {/* Left column */}
+          <div className="lg:col-span-3 space-y-6">
+            {/* Scenarios */}
+            <section className="panel panel-shadow overflow-hidden">
+              <div className="px-5 py-3.5 border-b border-line flex items-center justify-between bg-lab/50">
+                <h2 className="text-sm font-semibold">Security Scenarios</h2>
+                <span className="font-mono text-[11px] text-muted">Requester → Vendor → Approver → Purchaser</span>
+              </div>
+              <div className="divide-y divide-line">
+                {scenarios.map((sc) => (
+                  <div key={sc.id} className="px-5 py-4 hover:bg-crimson-faint/40 transition-colors">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-mono text-[11px] px-2 py-0.5 rounded border border-line bg-lab text-muted">
+                            SC-0{sc.id}
                           </span>
-                        )}
+                          <h3 className="font-medium text-sm">{sc.name}</h3>
+                        </div>
+                        <p className="text-muted text-[13px] mt-1">{sc.description}</p>
+                        <div className="flex flex-wrap gap-1.5 mt-2.5">
+                          {sc.expected_violations.length > 0 ? (
+                            sc.expected_violations.map((v) => (
+                              <Badge key={v} tone="red">
+                                {v}
+                              </Badge>
+                            ))
+                          ) : (
+                            <Badge tone="green">Positive Baseline</Badge>
+                          )}
+                        </div>
                       </div>
+                      <button
+                        onClick={() => execute(sc.id)}
+                        disabled={isBusy}
+                        className="btn-secondary !py-1.5 !px-3 text-xs whitespace-nowrap disabled:opacity-50"
+                      >
+                        {busyId === sc.id ? 'Running…' : 'Run Test'}
+                      </button>
                     </div>
-
-                    <button
-                      onClick={() => {
-                        const matched = runs.find((r) => r.id === sc.id);
-                        if (matched) setSelectedRun(matched);
-                      }}
-                      className="text-xs bg-redops-700 hover:bg-redops-600 text-white px-3 py-1.5 rounded transition-colors whitespace-nowrap"
-                    >
-                      View Attack Path
-                    </button>
                   </div>
-                </div>
-              ))}
-            </div>
-          </div>
+                ))}
+              </div>
+            </section>
 
-          {/* Execution History Table */}
-          <div className="bg-redops-800 border border-redops-700 rounded-lg overflow-hidden shadow-lg">
-            <div className="px-6 py-4 border-b border-redops-700 bg-redops-900/60">
-              <h2 className="text-base font-semibold text-white">Recent Pipeline Execution Runs</h2>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-redops-900/80 text-zinc-400 uppercase text-xs">
-                  <tr>
-                    <th className="px-6 py-3">Run ID</th>
-                    <th className="px-6 py-3">Scenario</th>
-                    <th className="px-6 py-3">Status</th>
-                    <th className="px-6 py-3">Attack Paths</th>
-                    <th className="px-6 py-3">Defense</th>
-                    <th className="px-6 py-3">Latency</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-redops-700/60 text-zinc-300">
-                  {runs.map((r) => (
-                    <tr
-                      key={r.id}
-                      onClick={() => setSelectedRun(r)}
-                      className="hover:bg-redops-700/30 cursor-pointer transition-colors"
-                    >
-                      <td className="px-6 py-3 font-mono text-xs text-red-400">{r.run_id}</td>
-                      <td className="px-6 py-3 font-medium text-white">{r.scenario_name}</td>
-                      <td className="px-6 py-3">
-                        <span className="inline-block px-2 py-0.5 rounded text-xs bg-emerald-900/50 text-emerald-400 border border-emerald-800">
-                          {r.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-3">
-                        {r.attack_path_count > 0 ? (
-                          <span className="text-amber-400 font-semibold">{r.attack_path_count} detected</span>
-                        ) : (
-                          <span className="text-zinc-500">None</span>
-                        )}
-                      </td>
-                      <td className="px-6 py-3">
-                        <span className="px-2 py-0.5 rounded text-xs bg-emerald-950 text-emerald-300 border border-emerald-800">
-                          {r.defense_verdict || "verified"}
-                        </span>
-                      </td>
-                      <td className="px-6 py-3 text-zinc-400">{r.latency_ms} ms</td>
+            {/* Runs table */}
+            <section className="panel panel-shadow overflow-hidden">
+              <div className="px-5 py-3.5 border-b border-line bg-lab/50">
+                <h2 className="text-sm font-semibold">Recent Execution Runs</h2>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead className="text-[11px] uppercase tracking-wider text-muted border-b border-line">
+                    <tr>
+                      <th className="px-5 py-2.5 font-mono">Run ID</th>
+                      <th className="px-5 py-2.5">Scenario</th>
+                      <th className="px-5 py-2.5">Violations</th>
+                      <th className="px-5 py-2.5">Attack Paths</th>
+                      <th className="px-5 py-2.5">Defense</th>
+                      <th className="px-5 py-2.5">Latency</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-line">
+                    {runs.map((r) => (
+                      <tr
+                        key={r.run_id}
+                        onClick={() => loadDetail(r.run_id)}
+                        className={`cursor-pointer transition-colors ${
+                          selectedRunId === r.run_id ? 'bg-crimson-faint/60' : 'hover:bg-lab/60'
+                        }`}
+                      >
+                        <td className="px-5 py-3 font-mono text-xs text-crimson">{r.run_id}</td>
+                        <td className="px-5 py-3 font-medium text-[13px]">{r.scenario_name}</td>
+                        <td className="px-5 py-3 tabular-nums">
+                          {r.violation_count > 0 ? <span className="text-crimson font-semibold">{r.violation_count}</span> : <span className="text-muted">0</span>}
+                        </td>
+                        <td className="px-5 py-3 tabular-nums">
+                          {r.attack_path_count > 0 ? <span className="text-amber-600 font-semibold">{r.attack_path_count}</span> : <span className="text-muted">None</span>}
+                        </td>
+                        <td className="px-5 py-3">
+                          <Badge tone={r.defense_verdict === 'all_blocked' ? 'green' : r.defense_verdict === 'some_bypassed' ? 'amber' : 'gray'}>
+                            {r.defense_verdict ?? 'clean'}
+                          </Badge>
+                        </td>
+                        <td className="px-5 py-3 text-muted tabular-nums text-[13px]">{r.latency_ms} ms</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
           </div>
-        </div>
 
-        {/* Right: Attack Path & Defense Inspector */}
-        <div className="space-y-6">
-          <div className="bg-redops-800 border border-redops-700 rounded-lg p-6 shadow-lg">
-            <h2 className="text-base font-semibold text-white mb-4 flex items-center justify-between">
-              <span>Attack Path & Defense Trace</span>
-              <span className="text-xs text-zinc-400 font-mono">
-                {selectedRun ? selectedRun.run_id : "Select a run"}
-              </span>
-            </h2>
-
-            {selectedRun ? (
-              <div className="space-y-5">
-                <div className="bg-redops-900/90 border border-redops-700 p-4 rounded text-xs">
-                  <div className="text-zinc-400 font-semibold uppercase">Scenario</div>
-                  <div className="text-white text-sm font-medium mt-1">{selectedRun.scenario_name}</div>
-                  <div className="text-zinc-400 mt-2">
-                    Violations: <span className="text-red-400 font-bold">{selectedRun.violation_count}</span> | 
-                    Attack Paths: <span className="text-amber-400 font-bold ml-1">{selectedRun.attack_path_count}</span>
-                  </div>
-                </div>
-
-                {/* Step timeline */}
-                <div>
-                  <div className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-3">
-                    Multi-Agent Deception Flow
-                  </div>
-
-                  <div className="space-y-3 relative before:absolute before:left-3 before:top-2 before:bottom-2 before:w-0.5 before:bg-redops-700">
-                    <div className="flex items-start gap-3 relative pl-6">
-                      <span className="w-2.5 h-2.5 rounded-full bg-red-500 absolute left-2 top-1.5 ring-4 ring-redops-900"></span>
-                      <div>
-                        <div className="text-xs font-semibold text-red-400">1. Deceptive Input Injected</div>
-                        <p className="text-xs text-zinc-400">Tool or request payload returns manipulated state.</p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-start gap-3 relative pl-6">
-                      <span className="w-2.5 h-2.5 rounded-full bg-amber-500 absolute left-2 top-1.5 ring-4 ring-redops-900"></span>
-                      <div>
-                        <div className="text-xs font-semibold text-amber-300">2. Intermediate Agent Fooled</div>
-                        <p className="text-xs text-zinc-400">VendorLookup or Approver accepts data without authoritative validation.</p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-start gap-3 relative pl-6">
-                      <span className="w-2.5 h-2.5 rounded-full bg-red-600 absolute left-2 top-1.5 ring-4 ring-redops-900"></span>
-                      <div>
-                        <div className="text-xs font-semibold text-red-300">3. Policy Breach (Insecure Run)</div>
-                        <p className="text-xs text-zinc-400">Unauthorized purchase executes with forged/unverified status.</p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-start gap-3 relative pl-6">
-                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 absolute left-2 top-1.5 ring-4 ring-redops-900"></span>
-                      <div>
-                        <div className="text-xs font-semibold text-emerald-400">4. Defense Verified (Defended Run)</div>
-                        <p className="text-xs text-zinc-400">AuthoritativeRegistryGuard / CryptographicLedgerGuard halts execution.</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="border-t border-redops-700 pt-4">
-                  <div className="text-xs font-semibold text-emerald-400 uppercase tracking-wider mb-2">
-                    Verified Defense Demonstration
-                  </div>
-                  <div className="p-3 bg-emerald-950/40 border border-emerald-800/50 rounded text-xs text-emerald-200">
-                    <p className="font-semibold">Guard Status: ACTIVE & VERIFIED</p>
-                    <p className="text-zinc-400 mt-1">
-                      Side-by-side execution confirms the attack path was broken at the trust boundary.
-                    </p>
-                  </div>
-                </div>
+          {/* Right column: inspector */}
+          <div className="lg:col-span-2">
+            <section className="panel panel-shadow p-5 lg:sticky lg:top-20">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-sm font-semibold">Attack Path & Defense Trace</h2>
+                <span className="font-mono text-[11px] text-muted">{selectedRun?.run_id ?? 'select a run'}</span>
               </div>
-            ) : (
-              <div className="text-center py-12 text-zinc-500 text-sm">
-                Select a scenario or execution run to inspect the detailed attack path and defense verification.
-              </div>
-            )}
+
+              {selectedRun || detail ? (
+                <div className="space-y-5">
+                  <div className="bg-lab border border-line rounded-lg p-3.5 text-xs">
+                    <div className="text-muted font-semibold uppercase tracking-wide text-[10px]">Scenario</div>
+                    <div className="font-medium mt-0.5">{detail?.scenario_name ?? selectedRun?.scenario_name}</div>
+                    <div className="text-muted mt-2 flex gap-4">
+                      <span>
+                        Violations <b className="text-crimson">{detail?.violations.length ?? selectedRun?.violation_count ?? 0}</b>
+                      </span>
+                      <span>
+                        Attack paths <b className="text-amber-600">{detail?.attack_paths.length ?? selectedRun?.attack_path_count ?? 0}</b>
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Timeline of trace events */}
+                  {detail && (
+                    <div>
+                      <div className="text-[10px] font-semibold text-muted uppercase tracking-wider mb-2.5">
+                        Deception Flow
+                      </div>
+                      <div className="relative space-y-3">
+                        <span className="absolute left-[5px] top-2 bottom-2 w-px bg-line-strong" />
+                        {detail.trace.slice(0, 8).map((ev) => {
+                          const untrusted = !ev.trusted;
+                          return (
+                            <div key={ev.id} className="relative pl-5">
+                              <span
+                                className={`absolute left-0 top-1 w-[11px] h-[11px] rounded-full border-2 border-paper ${
+                                  untrusted ? 'bg-crimson' : 'bg-emerald-500'
+                                }`}
+                              />
+                              <div className="flex items-baseline gap-2">
+                                <span className="font-mono text-[10px] text-muted shrink-0">{ev.timestamp}</span>
+                                <span className={`text-xs font-medium ${untrusted ? 'text-crimson' : 'text-ink'}`}>
+                                  {ev.action}
+                                </span>
+                              </div>
+                              <div className="text-[11px] text-muted">
+                                {ev.agent} · {ev.kind}
+                                {untrusted && <span className="text-crimson font-medium untrusted-flag"> · untrusted</span>}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Violation */}
+                  {detail?.violations[0] && (
+                    <div className="border border-crimson/25 bg-crimson-faint/60 rounded-lg p-3.5">
+                      <div className="text-[10px] font-semibold uppercase tracking-wider text-crimson mb-1">
+                        Detected Violation
+                      </div>
+                      <div className="text-sm font-medium">{detail.violations[0].title}</div>
+                      <p className="text-[12px] text-muted mt-1 leading-relaxed">{detail.violations[0].description}</p>
+                      {detail.violations[0].root_cause && (
+                        <p className="text-[12px] mt-2">
+                          <span className="font-semibold text-crimson">Root cause:</span>{' '}
+                          <span className="text-muted">{detail.violations[0].root_cause}</span>
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Defense */}
+                  {detail?.defenses[0] && (
+                    <div className="border-t border-line pt-4">
+                      <div className="text-[10px] font-semibold text-emerald-700 uppercase tracking-wider mb-2">
+                        Verified Defense
+                      </div>
+                      <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-xs">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-semibold text-emerald-800">{detail.defenses[0].defense.name}</span>
+                          <Badge tone="green">{detail.defenses[0].verdict}</Badge>
+                        </div>
+                        <p className="text-muted mt-1.5 leading-relaxed">{detail.defenses[0].explanation}</p>
+                        <p className="font-mono text-[10px] text-muted mt-2">{detail.defenses[0].defense.code_location}</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-center py-12 text-muted text-sm">
+                  Select a scenario execution or run to inspect the detailed attack path and verify defense behavior.
+                </div>
+              )}
+            </section>
           </div>
         </div>
       </div>
+
+      {/* ── Footer ── */}
+      <footer className="border-t border-line py-5">
+        <div className="max-w-7xl mx-auto px-6 flex items-center justify-between text-xs text-muted">
+          <span>© 2026 RedOps · Agent Console</span>
+          <span className="font-mono">Simulated environment · no real purchases executed</span>
+        </div>
+      </footer>
     </div>
   );
 }
