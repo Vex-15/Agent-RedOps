@@ -73,10 +73,13 @@ def get_db():
 def _seed_scenarios():
     db = database.SessionLocal()
     try:
-        existing = db.query(models.ScenarioRecord).count()
-        if existing > 0:
-            return
+        existing_names = {
+            r.name for r in db.query(models.ScenarioRecord.name)
+        }
+        added = 0
         for s in BUILTIN_SCENARIOS:
+            if s["name"] in existing_names:
+                continue
             rec = models.ScenarioRecord(
                 name=s["name"],
                 description=s["description"],
@@ -87,7 +90,10 @@ def _seed_scenarios():
                 expected_outcome=s.get("expected_outcome", ""),
             )
             db.add(rec)
+            added += 1
         db.commit()
+        if added:
+            print(f"[redops] seeded {added} new builtin scenario(s)")
     finally:
         db.close()
 

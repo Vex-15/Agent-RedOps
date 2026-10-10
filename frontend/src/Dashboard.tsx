@@ -120,8 +120,8 @@ export default function Dashboard() {
             AGENT <span className="text-crimson">CONSOLE</span>
           </h1>
           <p className="text-muted text-sm mt-3 max-w-xl">
-            Run scenarios against the simulated requester → vendor → approver → purchaser pipeline, inspect deception
-            traces, and verify guards neutralize every attack path.
+            Run scenarios against the simulated requester → vendor → approver → purchaser → auditor pipeline, inspect
+            deception traces, and verify guards neutralize every attack path.
           </p>
         </div>
 
@@ -155,7 +155,7 @@ export default function Dashboard() {
             <section className="panel panel-shadow overflow-hidden">
               <div className="px-5 py-3.5 border-b border-line flex items-center justify-between bg-lab/50">
                 <h2 className="text-sm font-semibold">Security Scenarios</h2>
-                <span className="font-mono text-[11px] text-muted">Requester → Vendor → Approver → Purchaser</span>
+                <span className="font-mono text-[11px] text-muted">Requester → Vendor → Approver → Purchaser → Auditor</span>
               </div>
               <div className="divide-y divide-line">
                 {scenarios.map((sc) => (

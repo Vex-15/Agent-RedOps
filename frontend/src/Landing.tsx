@@ -53,6 +53,7 @@ const PIPELINE_STAGES = [
   { title: 'Received vendor response', desc: 'Processing tool output…' },
   { title: 'Evaluating approval', desc: 'Checking policy compliance…' },
   { title: 'Detecting issues', desc: 'Analyzing agent behavior…' },
+  { title: 'Auditing execution', desc: 'Post-run compliance review…' },
 ];
 
 const NAV_ITEMS = ['Home', 'Run Test', 'Scenarios', 'Findings', 'Reports', 'Settings'];
@@ -117,13 +118,13 @@ function DemoConsole() {
                 <div key={s.title} className="flex items-start gap-2.5">
                   <span
                     className={`mt-0.5 w-4 h-4 shrink-0 rounded-full flex items-center justify-center text-[9px] text-white ${
-                      i === 0 ? 'bg-crimson' : i < 4 ? 'bg-crimson/60' : 'bg-ink/20 border border-line-strong'
+                      i === 0 ? 'bg-crimson' : i < 5 ? 'bg-crimson/60' : 'bg-ink/20 border border-line-strong'
                     }`}
                   >
-                    {i === 0 ? '✓' : i < 4 ? '•' : ''}
+                    {i === 0 ? '✓' : i < 5 ? '•' : ''}
                   </span>
                   <div>
-                    <div className={`text-xs font-medium ${i < 5 ? 'text-ink' : 'text-muted'}`}>{s.title}</div>
+                    <div className={`text-xs font-medium ${i < 6 ? 'text-ink' : 'text-muted'}`}>{s.title}</div>
                     <div className="text-[10px] text-muted">{s.desc}</div>
                   </div>
                 </div>

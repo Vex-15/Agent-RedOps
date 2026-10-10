@@ -103,7 +103,7 @@ def _run_with_injection(
     """
     from agents.pipeline import (
         agent_requester, agent_vendor_lookup,
-        agent_approver, agent_purchaser,
+        agent_approver, agent_purchaser, agent_auditor,
     )
     all_events: list[TraceEvent] = []
 
@@ -133,6 +133,10 @@ def _run_with_injection(
     request, events = agent_purchaser(request, overrides, defended=False)
     all_events.extend(events)
 
+    # Stage 5: Auditor (post-execution review)
+    request, events = agent_auditor(request, overrides, defended=False)
+    all_events.extend(events)
+
     return request, all_events
 
 
@@ -160,7 +164,7 @@ def _verify_defense(
         # so we re-run with defended=True on the purchaser
         from agents.pipeline import (
             agent_requester, agent_vendor_lookup,
-            agent_approver, agent_purchaser,
+            agent_approver, agent_purchaser, agent_auditor,
         )
         request2 = copy.deepcopy(scenario["request"])
         APPROVAL_LEDGER.clear()
@@ -181,6 +185,8 @@ def _verify_defense(
             trusted=False,
         ))
         request2, ev = agent_purchaser(request2, overrides, defended=True)
+        all_events2.extend(ev)
+        request2, ev = agent_auditor(request2, overrides, defended=True)
         all_events2.extend(ev)
         trace_after = all_events2
         final_request = request2

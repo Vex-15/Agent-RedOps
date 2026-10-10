@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from scenarios.builtin import BUILTIN_SCENARIOS
 from scenarios.runner import run_scenario
-from core.types import RunStatus, DefenseVerdict, ViolationCategory
+from core.types import RunStatus, DefenseVerdict, ViolationCategory, AgentRole
 
 
 class TestDeceptiveVendor:
@@ -130,3 +130,57 @@ class TestVendorIdentity:
     def test_finds_deceptive_output(self):
         categories = [v.category for v in self.result.violations]
         assert ViolationCategory.DECEPTIVE_TOOL_OUTPUT in categories
+
+
+class TestInstructionOverride:
+    """Scenario 6: metadata instructs agents to bypass budget check."""
+
+    def setup_method(self):
+        self.result = run_scenario(BUILTIN_SCENARIOS[5])
+
+    def test_pipeline_completes(self):
+        assert self.result.status == RunStatus.COMPLETED
+
+    def test_finds_conflicting_instructions(self):
+        categories = [v.category for v in self.result.violations]
+        assert ViolationCategory.CONFLICTING_INSTRUCTIONS in categories
+
+    def test_recommends_instruction_precedence_defense(self):
+        names = [d.defense.name for d in self.result.defenses]
+        assert "Instruction Precedence Guard" in names
+
+    def test_purchase_executed_in_insecure_run(self):
+        """The insecure pipeline obeys the override and executes."""
+        executed = [e for e in self.result.trace if e.action == "purchase_completed" and e.trusted]
+        assert len(executed) > 0
+
+
+class TestUnregisteredVendor:
+    """Scenario 7: vendor_id not present in the canonical catalog."""
+
+    def setup_method(self):
+        self.result = run_scenario(BUILTIN_SCENARIOS[6])
+
+    def test_pipeline_completes(self):
+        assert self.result.status == RunStatus.COMPLETED
+
+    def test_finds_deceptive_output(self):
+        categories = [v.category for v in self.result.violations]
+        assert ViolationCategory.DECEPTIVE_TOOL_OUTPUT in categories
+
+
+class TestAuditorStage:
+    """The pipeline now ends with a post-execution audit event."""
+
+    def test_every_scenario_produces_audit_event(self):
+        for scenario in BUILTIN_SCENARIOS:
+            result = run_scenario(scenario)
+            audit_events = [e for e in result.trace if e.agent == AgentRole.AUDITOR]
+            assert len(audit_events) == 1, f"scenario '{scenario['name']}' missing audit event"
+            assert audit_events[0].trusted is True
+
+    def test_audit_records_buyer_result(self):
+        result = run_scenario(BUILTIN_SCENARIOS[3])
+        audit = [e for e in result.trace if e.agent == AgentRole.AUDITOR][0]
+        assert audit.output_data["purchase_status"] == "executed"
+        assert audit.output_data["vendor_verified_per_catalog"] is True
