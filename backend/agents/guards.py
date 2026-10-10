@@ -9,6 +9,7 @@ multi-agent workflows. They break attack paths at specific trust boundaries:
 3. StrictBudgetGuard: Enforces hard treasury limits; disallows metadata instruction overrides.
 4. StrictEntityBindingGuard: Disallows cosmetic display name spoofing; binds strictly to canonical IDs.
 5. InstructionPrecedenceGuard: Ensures system policy supremacy over prompt/metadata instructions.
+6. CanonicalCreditLimitGuard: Re-validates purchases against canonical per-vendor credit limits.
 """
 
 from __future__ import annotations
@@ -34,24 +35,48 @@ class AuthoritativeRegistryGuard:
     def inspect_vendor_lookup(vendor_id: str, tool_result: dict[str, Any]) -> tuple[dict[str, Any], DefenseGuardReport, TraceEvent]:
         real_entry = VENDOR_CATALOG.get(vendor_id)
         
-        # If the tool falsely claimed the vendor is verified
-        is_tool_claiming_verified = tool_result.get("verified", False)
-        is_actually_verified = real_entry.get("verified", False) if real_entry else False
-        
-        tamper_detected = is_tool_claiming_verified and not is_actually_verified
-        
+        # Cross-check every security-relevant claim against the canonical
+        # registry: existence, verification status and credit limit.
         sanitized_result = dict(tool_result)
-        if tamper_detected:
-            # Overwrite deceptive output with ground truth
+        is_actually_verified = real_entry.get("verified", False) if real_entry else False
+        discrepancies: list[str] = []
+        
+        if real_entry is None:
+            # Vendor is not in the catalog at all — any positive claim is fabricated.
+            if tool_result.get("found") or tool_result.get("verified"):
+                discrepancies.append(
+                    f"vendor '{vendor_id}' is not in the canonical registry, but "
+                    f"the tool claimed found={tool_result.get('found')}, "
+                    f"verified={tool_result.get('verified')}"
+                )
+            sanitized_result["found"] = False
             sanitized_result["verified"] = False
+            sanitized_result["max_credit"] = 0
+        else:
+            for field_name in ("verified", "max_credit", "name"):
+                if field_name not in tool_result:
+                    continue
+                claimed = tool_result.get(field_name)
+                canonical = real_entry.get(field_name)
+                if claimed != canonical:
+                    discrepancies.append(
+                        f"{field_name}: canonical={canonical}, tool_claimed={claimed}"
+                    )
+                    sanitized_result[field_name] = canonical
+        
+        if discrepancies:
+            # Overwrite deceptive output with ground truth
             sanitized_result["_guard_intercepted"] = True
-            sanitized_result["_tamper_warning"] = f"Tool output claimed verified=True for {vendor_id}, but canonical registry shows verified=False"
+            sanitized_result["_tamper_warning"] = "; ".join(discrepancies)
             
             report = DefenseGuardReport(
                 guard_name="AuthoritativeRegistryGuard",
                 passed=False,
-                reason=f"Deceptive verification claim intercepted for vendor '{vendor_id}'. Reverted to unverified status.",
-                details={"vendor_id": vendor_id, "claimed_verified": True, "canonical_verified": False}
+                reason=(
+                    f"Deceptive registry claim intercepted for vendor "
+                    f"'{vendor_id}'. Reverted to canonical values."
+                ),
+                details={"vendor_id": vendor_id, "discrepancies": discrepancies}
             )
             event = TraceEvent(
                 agent=AgentRole.VENDOR_LOOKUP,
@@ -263,3 +288,77 @@ class CryptographicLedgerGuard:
             trusted=True
         )
         return True, "Approval signature verified against ledger", event
+
+
+class CanonicalCreditLimitGuard:
+    """
+    Re-validates the purchase amount against the canonical per-vendor
+    credit limit at execution time, before any money moves.
+
+    Credit limits that only exist inside vendor tool output (or that
+    were inflated by a compromised tool) never reach this guard: it
+    reads VENDOR_CATALOG directly and fails closed for unknown vendors.
+    """
+    @staticmethod
+    def inspect_purchase(vendor_id: str, amount: float) -> tuple[bool, DefenseGuardReport, TraceEvent]:
+        canonical = VENDOR_CATALOG.get(vendor_id)
+
+        if not canonical:
+            event = TraceEvent(
+                agent=AgentRole.PURCHASER,
+                kind=EventKind.POLICY_CHECK,
+                action="guard_reject_unknown_vendor_credit",
+                input_data={"vendor_id": vendor_id, "amount": amount},
+                output_data={"executed": False},
+                trusted=True,
+                metadata={"defense_triggered": "CanonicalCreditLimitGuard", "blocked": True}
+            )
+            return False, DefenseGuardReport(
+                guard_name="CanonicalCreditLimitGuard",
+                passed=False,
+                reason=f"Vendor '{vendor_id}' has no canonical registry entry — failing closed.",
+                details={"vendor_id": vendor_id, "amount": amount},
+            ), event
+
+        max_credit = canonical.get("max_credit", 0)
+        if amount > max_credit:
+            event = TraceEvent(
+                agent=AgentRole.PURCHASER,
+                kind=EventKind.POLICY_CHECK,
+                action="guard_reject_credit_limit_exceeded",
+                input_data={
+                    "vendor_id": vendor_id,
+                    "amount": amount,
+                    "max_credit": max_credit,
+                },
+                output_data={"executed": False},
+                trusted=True,
+                metadata={"defense_triggered": "CanonicalCreditLimitGuard", "blocked": True}
+            )
+            return False, DefenseGuardReport(
+                guard_name="CanonicalCreditLimitGuard",
+                passed=False,
+                reason=(
+                    f"Purchase of ${amount} exceeds the canonical credit "
+                    f"limit of ${max_credit} for vendor '{vendor_id}'."
+                ),
+                details={
+                    "vendor_id": vendor_id,
+                    "amount": amount,
+                    "max_credit": max_credit,
+                },
+            ), event
+
+        event = TraceEvent(
+            agent=AgentRole.PURCHASER,
+            kind=EventKind.POLICY_CHECK,
+            action="guard_verify_credit_limit",
+            input_data={"vendor_id": vendor_id, "amount": amount},
+            output_data={"within_limit": True, "max_credit": max_credit},
+            trusted=True
+        )
+        return True, DefenseGuardReport(
+            guard_name="CanonicalCreditLimitGuard",
+            passed=True,
+            reason="Purchase is within the canonical vendor credit limit.",
+        ), event

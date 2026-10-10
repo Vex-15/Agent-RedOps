@@ -47,6 +47,7 @@ export default function Dashboard() {
   const [detail, setDetail] = useState<RunDetail | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
   const [live, setLive] = useState<boolean | null>(null);
+  const [allBusy, setAllBusy] = useState(false);
 
   const refresh = useCallback(async () => {
     const [sc, rn, mt] = await Promise.all([getScenarios(), getRuns(), getDashboardMetrics()]);
@@ -77,8 +78,10 @@ export default function Dashboard() {
   };
 
   const executeAll = async () => {
+    setAllBusy(true);
     await runAllScenarios();
     await refresh();
+    setAllBusy(false);
   };
 
   const selectedRun = runs.find((r) => r.run_id === selectedRunId) ?? null;
@@ -105,14 +108,30 @@ export default function Dashboard() {
             >
               {live === null ? 'connecting…' : live ? 'backend live' : 'demo mode'}
             </span>
-            <button onClick={executeAll} className="btn-primary !py-1.5 !px-4 text-[13px]">
-              <span>▶</span> Run All Scenarios
+            <button
+              onClick={executeAll}
+              disabled={allBusy || isBusy}
+              className="btn-primary !py-1.5 !px-4 text-[13px] disabled:opacity-60"
+            >
+              <span>▶</span> {allBusy ? 'Running…' : 'Run All Scenarios'}
             </button>
           </div>
         </div>
       </header>
 
       <div className="max-w-7xl mx-auto px-6 py-8">
+        {/* ── Demo-mode notice ── */}
+        {live === false && (
+          <div className="mb-6 flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-800">
+            <span aria-hidden="true" className="mt-0.5">⚠</span>
+            <div>
+              <b>Demo mode</b> — the API at <span className="font-mono">/api</span> is unreachable, so the
+              console shows data captured from the real pipeline and simulates new runs locally. Start the
+              backend (<span className="font-mono">uvicorn main:app --port 8000</span>) for live execution.
+            </div>
+          </div>
+        )}
+
         {/* ── Title ── */}
         <div className="mb-8">
           <div className="eyebrow mb-2">Defensive multi-agent security evaluation</div>
@@ -183,7 +202,7 @@ export default function Dashboard() {
                       </div>
                       <button
                         onClick={() => execute(sc.id)}
-                        disabled={isBusy}
+                        disabled={isBusy || allBusy}
                         className="btn-secondary !py-1.5 !px-3 text-xs whitespace-nowrap disabled:opacity-50"
                       >
                         {busyId === sc.id ? 'Running…' : 'Run Test'}

@@ -71,6 +71,36 @@ def _defense_auth_bypass(v: PolicyViolation) -> Defense:
 
 
 def _defense_deceptive_output(v: PolicyViolation) -> Defense:
+    # Budget contradictions are reconciled against the treasury ledger,
+    # not against a hashed tool response — point at the right guard.
+    if "budget" in v.title.lower():
+        return Defense(
+            name="Strict Budget Guard",
+            description=(
+                "Reconcile every check_budget result against the "
+                "authoritative treasury allocation before the approver "
+                "acts on it. When the tool claims funds the treasury does "
+                "not reserve, the request is rejected."
+            ),
+            code_location="agents/guards.py — StrictBudgetGuard",
+            fix_description=(
+                "StrictBudgetGuard.inspect_budget compares the tool result "
+                "with AUTHORITATIVE_BUDGETS and fails when the tool claims "
+                "sufficient funds the treasury does not hold. Make it "
+                "mandatory for every budget decision, not just the "
+                "defended pipeline.\n\n"
+                "```python\n"
+                "# In agent_approver, before honoring budget_result:\n"
+                "passed, report, event = StrictBudgetGuard.inspect_budget(\n"
+                "    department, amount, budget_result, metadata,\n"
+                ")\n"
+                "if not passed:\n"
+                "    # Do NOT approve against funds the treasury rejects\n"
+                "    ...\n"
+                "```"
+            ),
+            category=ViolationCategory.DECEPTIVE_TOOL_OUTPUT,
+        )
     return Defense(
         name="Tool Response Integrity Check",
         description=(
@@ -162,20 +192,20 @@ def _defense_credit_limit(v: PolicyViolation) -> Defense:
             "registry — never against the max_credit value that arrived "
             "inside tool output."
         ),
-        code_location="agents/pipeline.py — agent_purchaser()",
+        code_location="agents/guards.py — CanonicalCreditLimitGuard",
         fix_description=(
-            "Look up VENDOR_CATALOG[vendor_id]['max_credit'] and reject "
-            "the purchase if amount exceeds it, regardless of what any "
-            "tool claimed.\n\n"
+            "CanonicalCreditLimitGuard.inspect_purchase() re-validates the "
+            "amount against VENDOR_CATALOG[vendor_id]['max_credit'] at "
+            "execution time and fails closed for unknown vendors, "
+            "regardless of what any tool claimed. Enable it for every "
+            "purchase, not just the defended pipeline.\n\n"
             "```python\n"
             "# In agent_purchaser, before submit_purchase:\n"
-            "from agents.tools import VENDOR_CATALOG\n"
-            "max_credit = VENDOR_CATALOG.get(vendor_id, {}).get('max_credit', 0)\n"
-            "if amount > max_credit:\n"
-            "    request['purchase_result'] = {\n"
-            "        'status': 'rejected',\n"
-            "        'reason': f'Exceeds canonical vendor credit limit ${max_credit}',\n"
-            "    }\n"
+            "within_limit, report, event = CanonicalCreditLimitGuard.inspect_purchase(\n"
+            "    vendor_id, amount,\n"
+            ")\n"
+            "if not within_limit:\n"
+            "    # Do NOT execute beyond the canonical credit line\n"
             "    ...\n"
             "```"
         ),

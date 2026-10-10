@@ -195,8 +195,11 @@ def _verify_defense(
             request, tool_overrides=overrides, defended=True,
         )
 
-    # Re-analyze
-    violations_after = analyze_trace(trace_after, scenario, final_request)
+    # Re-analyze.  `defended=True` lets the analyzer credit the guards:
+    # violations they demonstrably intercepted are no longer reported.
+    violations_after = analyze_trace(
+        trace_after, scenario, final_request, defended=True,
+    )
 
     # Determine verdict
     if len(violations_before) > 0 and len(violations_after) == 0:

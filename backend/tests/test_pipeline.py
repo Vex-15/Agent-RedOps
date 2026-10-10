@@ -184,3 +184,100 @@ class TestAuditorStage:
         audit = [e for e in result.trace if e.agent == AgentRole.AUDITOR][0]
         assert audit.output_data["purchase_status"] == "executed"
         assert audit.output_data["vendor_verified_per_catalog"] is True
+
+
+class TestCreditLimitEvasion:
+    """Scenario 8: inflated max_credit unlocks an over-limit purchase."""
+
+    def setup_method(self):
+        self.result = run_scenario(BUILTIN_SCENARIOS[7])
+
+    def test_pipeline_completes(self):
+        assert self.result.status == RunStatus.COMPLETED
+
+    def test_categories_found(self):
+        categories = [v.category for v in self.result.violations]
+        assert ViolationCategory.TRUST_BOUNDARY in categories
+        assert ViolationCategory.DECEPTIVE_TOOL_OUTPUT in categories
+        assert ViolationCategory.POLICY_EXCEED_LIMIT in categories
+
+    def test_name_and_verification_not_flagged(self):
+        """Only max_credit lies — identity checks must stay quiet."""
+        categories = [v.category for v in self.result.violations]
+        assert ViolationCategory.SOCIAL_ENGINEERING not in categories
+
+    def test_defenses_block(self):
+        assert len(self.result.defenses) > 0
+        assert all(d.verdict == DefenseVerdict.BLOCKED for d in self.result.defenses)
+
+
+class TestAmountTampering:
+    """Scenario 9: amount rewritten after the approver signed off."""
+
+    def setup_method(self):
+        self.result = run_scenario(BUILTIN_SCENARIOS[8])
+
+    def test_pipeline_completes(self):
+        assert self.result.status == RunStatus.COMPLETED
+
+    def test_finds_scope_violation(self):
+        scope = [
+            v for v in self.result.violations
+            if v.title == "Purchase executed beyond approved amount"
+        ]
+        assert len(scope) == 1
+        assert scope[0].category == ViolationCategory.AUTH_BYPASS
+        assert scope[0].severity.value == "critical"
+
+    def test_finds_credit_limit_breach(self):
+        categories = [v.category for v in self.result.violations]
+        assert ViolationCategory.POLICY_EXCEED_LIMIT in categories
+
+    def test_ledger_guard_blocks_tampering(self):
+        assert len(self.result.defenses) > 0
+        assert all(d.verdict == DefenseVerdict.BLOCKED for d in self.result.defenses)
+
+
+class TestShadowBudget:
+    """Scenario 10: budget tool overstates the treasury allocation."""
+
+    def setup_method(self):
+        self.result = run_scenario(BUILTIN_SCENARIOS[9])
+
+    def test_pipeline_completes(self):
+        assert self.result.status == RunStatus.COMPLETED
+
+    def test_finds_budget_discrepancy(self):
+        titles = [v.title for v in self.result.violations]
+        assert "Budget tool overstates available funds" in titles
+
+    def test_recommends_budget_guard(self):
+        names = [d.defense.name for d in self.result.defenses]
+        assert "Strict Budget Guard" in names
+
+    def test_budget_guard_blocks(self):
+        assert len(self.result.defenses) > 0
+        assert all(d.verdict == DefenseVerdict.BLOCKED for d in self.result.defenses)
+
+
+class TestDefendedPipelineIsClean:
+    """
+    The demo's core promise: for every attack scenario, the defended
+    re-run neutralizes every violation the insecure run produced.
+    """
+
+    def test_every_scenario_is_neutralized_when_defended(self):
+        for scenario in BUILTIN_SCENARIOS:
+            result = run_scenario(scenario)
+            assert result.status == RunStatus.COMPLETED, scenario["name"]
+            for d in result.defenses:
+                assert d.verdict == DefenseVerdict.BLOCKED, (
+                    f"{scenario['name']}: defense '{d.defense.name}' "
+                    f"reported {d.verdict.value}"
+                )
+
+    def test_positive_control_stays_clean(self):
+        """The legitimate baseline must still produce zero violations."""
+        result = run_scenario(BUILTIN_SCENARIOS[3])
+        assert len(result.violations) == 0
+        assert len(result.defenses) == 0

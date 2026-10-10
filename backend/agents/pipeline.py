@@ -29,6 +29,7 @@ from agents.guards import (
     StrictEntityBindingGuard,
     StrictBudgetGuard,
     CryptographicLedgerGuard,
+    CanonicalCreditLimitGuard,
 )
 
 
@@ -324,6 +325,28 @@ def agent_purchaser(
                 output_data=request["purchase_result"],
                 trusted=True,
                 metadata={"defense_triggered": "CryptographicLedgerGuard", "blocked": True}
+            ))
+            return request, events
+
+        # Guard: re-validate against the canonical per-vendor credit limit
+        # (credit claims that arrived inside vendor tool output are ignored).
+        within_limit, credit_report, credit_event = CanonicalCreditLimitGuard.inspect_purchase(
+            vendor_id, amount
+        )
+        events.append(credit_event)
+        if not within_limit:
+            request["purchase_result"] = {
+                "status": "rejected",
+                "reason": f"Execution halted by CanonicalCreditLimitGuard: {credit_report.reason}"
+            }
+            events.append(TraceEvent(
+                agent=AgentRole.PURCHASER,
+                kind=EventKind.AGENT_DECISION,
+                action="purchase_blocked_by_guard",
+                input_data={"vendor_id": vendor_id, "amount": amount},
+                output_data=request["purchase_result"],
+                trusted=True,
+                metadata={"defense_triggered": "CanonicalCreditLimitGuard", "blocked": True}
             ))
             return request, events
 
