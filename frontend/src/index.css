@@ -1,0 +1,19 @@
+@import "tailwindcss";
+
+@theme {
+  --color-redops-900: #1a0505;
+  --color-redops-800: #2d0a0a;
+  --color-redops-700: #4a1010;
+  --color-redops-600: #821c1c;
+  --color-redops-500: #dc2626;
+  --color-redops-400: #f87171;
+  --color-redops-300: #fca5a5;
+  --color-redops-100: #fee2e2;
+}
+
+body {
+  margin: 0;
+  background-color: #0f0404;
+  color: #f4f4f5;
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}

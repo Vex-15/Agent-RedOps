@@ -1,0 +1,14 @@
+version: 1.0
+project:
+  name: "RedOps"
+  description: "AI-Agent Security Analysis Platform"
+checkpoints:
+  enabled: true
+  directory: ".entire/checkpoints"
+context:
+  include:
+    - "backend/**/*.py"
+    - "frontend/src/**/*.{ts,tsx}"
+  exclude:
+    - "node_modules/**"
+    - "**/*.db"
