@@ -135,3 +135,34 @@ body {
   height: 2px;
   background: var(--color-line-strong);
 }
+
+/* ── Vertical rhythm system ───────────────────────────────
+   One scale for every major section so the page scrolls
+   as deliberate chapters instead of stacked blocks.      */
+.section {
+  /* Major section top/bottom padding: 112–160px on desktop,
+     scaled down fluidly on tablet/mobile. */
+  padding-block: clamp(88px, 11vw, 160px);
+}
+
+/* Hero fills the viewport on desktop and breathes on mobile. */
+.hero {
+  padding-block: clamp(64px, 9vw, 120px);
+}
+@media (min-width: 1024px) {
+  .hero {
+    min-height: 92vh;
+    display: flex;
+    align-items: center;
+  }
+}
+
+/* Heading → content gap: 40–56px. */
+.section-head {
+  margin-bottom: clamp(40px, 5vw, 56px);
+}
+
+/* Extra running room under intro copy before its content. */
+.lede-copy {
+  margin-top: clamp(24px, 3vw, 32px);
+}

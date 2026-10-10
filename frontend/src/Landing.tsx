@@ -190,8 +190,8 @@ export default function Landing() {
 
       <main>
         {/* ── Hero ── */}
-        <section className="relative overflow-hidden">
-          <div className="max-w-7xl mx-auto px-6 pt-16 pb-14 grid lg:grid-cols-2 gap-10 items-center">
+        <section className="hero relative overflow-hidden">
+          <div className="max-w-7xl mx-auto px-6 grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">
             <div>
               <div className="eyebrow mb-5">AI Agent Security Testing</div>
               <h1 className="font-display text-5xl sm:text-6xl xl:text-7xl leading-[1.02] tracking-tight">
@@ -199,7 +199,7 @@ export default function Landing() {
                 <span className="block text-ink">FOR THE</span>
                 <span className="block text-crimson">AGENT ERA</span>
               </h1>
-              <p className="mt-6 text-muted max-w-md text-base leading-relaxed">
+              <p className="lede-copy text-muted max-w-md text-base leading-relaxed">
                 Test your AI agents, uncover policy weaknesses, and strengthen defenses — before they become real risks.
               </p>
               <div className="mt-8 flex flex-wrap items-center gap-3">
@@ -210,7 +210,7 @@ export default function Landing() {
                   View Demo
                 </a>
               </div>
-              <div className="mt-10 flex flex-wrap gap-6">
+              <div className="mt-12 flex flex-wrap gap-x-8 gap-y-4">
                 {[
                   { icon: <CubeIcon />, label: 'Simulated Environment' },
                   { icon: <ShieldIcon />, label: 'Actionable Findings' },
@@ -244,7 +244,7 @@ export default function Landing() {
         </section>
 
         {/* ── Section 01: Vulnerability → Resilience ── */}
-        <section id="product" className="max-w-7xl mx-auto px-6 py-16 grid lg:grid-cols-2 gap-10 items-center">
+        <section id="product" className="section max-w-7xl mx-auto px-6 grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">
           <div>
             <div className="section-num mb-3">01</div>
             <h2 className="font-display text-3xl sm:text-4xl xl:text-5xl leading-tight">
@@ -252,11 +252,11 @@ export default function Landing() {
               VULNERABILITY<br />
               TO <span className="text-crimson">RESILIENCE</span>
             </h2>
-            <p className="mt-6 text-muted max-w-md leading-relaxed">
+            <p className="lede-copy text-muted max-w-md leading-relaxed">
               RedOps helps you understand how your AI agents behave in real-world conditions, identify security
               weaknesses, and implement targeted improvements.
             </p>
-            <a href="#demo" className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-ink border-b-2 border-crimson pb-1 hover:text-crimson transition-colors">
+            <a href="#demo" className="mt-10 inline-flex items-center gap-2 text-sm font-semibold text-ink border-b-2 border-crimson pb-1 hover:text-crimson transition-colors">
               See how it works <ArrowRight />
             </a>
           </div>
@@ -273,8 +273,8 @@ export default function Landing() {
         </section>
 
         {/* ── Section 02: Complete security layer ── */}
-        <section id="features" className="max-w-7xl mx-auto px-6 py-16">
-          <div className="grid lg:grid-cols-2 gap-6 items-end mb-10">
+        <section id="features" className="section max-w-7xl mx-auto px-6">
+          <div className="section-head grid lg:grid-cols-2 gap-6 items-end">
             <div>
               <div className="section-num mb-3">02</div>
               <h2 className="font-display text-2xl sm:text-3xl xl:text-4xl leading-tight">
@@ -289,7 +289,7 @@ export default function Landing() {
             </p>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-5">
+          <div className="grid md:grid-cols-3 gap-6">
             {[
               {
                 num: '01',
@@ -310,14 +310,14 @@ export default function Landing() {
                 desc: 'Get clear analysis and code-level recommendations to fix vulnerabilities.',
               },
             ].map((c) => (
-              <div key={c.num} className="panel panel-shadow p-6 flex flex-col hover:border-crimson/40 transition-colors group">
-                <div className="flex items-center justify-between mb-8">
+              <div key={c.num} className="panel panel-shadow p-7 lg:p-8 flex flex-col hover:border-crimson/40 transition-colors group">
+                <div className="flex items-center justify-between mb-10">
                   <span className="text-crimson">{c.icon}</span>
                   <span className="font-mono text-xs text-muted">{c.num}</span>
                 </div>
                 <h3 className="font-semibold text-ink text-lg">{c.title}</h3>
                 <p className="text-sm text-muted mt-2 leading-relaxed flex-1">{c.desc}</p>
-                <span className="mt-6 text-crimson self-end group-hover:translate-x-1 transition-transform">
+                <span className="mt-8 text-crimson self-end group-hover:translate-x-1 transition-transform">
                   <ArrowRight />
                 </span>
               </div>
@@ -326,8 +326,8 @@ export default function Landing() {
         </section>
 
         {/* ── Section 03: Live demo console ── */}
-        <section id="demo" className="max-w-7xl mx-auto px-6 py-16">
-          <div className="grid lg:grid-cols-2 gap-6 items-end mb-8">
+        <section id="demo" className="section max-w-7xl mx-auto px-6">
+          <div className="section-head grid lg:grid-cols-2 gap-6 items-end">
             <div>
               <div className="section-num mb-3">03</div>
               <h2 className="font-display text-2xl sm:text-3xl">
@@ -342,7 +342,7 @@ export default function Landing() {
         </section>
 
         {/* ── CTA ── */}
-        <section className="max-w-7xl mx-auto px-6 py-16 grid lg:grid-cols-2 gap-8 items-center">
+        <section className="section max-w-7xl mx-auto px-6 lg:grid-cols-2 grid gap-12 items-center">
           <div>
             <div className="section-num mb-3">04</div>
             <h2 className="font-display text-4xl sm:text-5xl xl:text-6xl leading-tight">
@@ -363,8 +363,8 @@ export default function Landing() {
       </main>
 
       {/* ── Footer ── */}
-      <footer className="border-t border-line py-10">
-        <div className="max-w-7xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <footer className="border-t border-line py-16">
+        <div className="max-w-7xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-6">
           <a href="/">
             <Logo />
           </a>
@@ -389,7 +389,7 @@ export default function Landing() {
             </a>
           </div>
         </div>
-        <div className="max-w-7xl mx-auto px-6 mt-6 pt-6 border-t border-line flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-muted">
+        <div className="max-w-7xl mx-auto px-6 mt-12 pt-8 border-t border-line flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-muted">
           <span>© 2026 RedOps. All rights reserved.</span>
           <div className="flex gap-5">
             <a href="#product" className="hover:text-ink">Privacy</a>
