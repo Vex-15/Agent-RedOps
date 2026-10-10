@@ -126,13 +126,71 @@ def _defense_social_engineering(v: PolicyViolation) -> Defense:
     )
 
 
+def _defense_conflicting_instructions(v: PolicyViolation) -> Defense:
+    return Defense(
+        name="Instruction Precedence Guard",
+        description=(
+            "Enforce that system policy always outranks any instruction "
+            "carried in request metadata or tool output. Fields like "
+            "bypass_budget_check or priority_override must be treated as "
+            "untrusted data to evaluate (and normally reject), never as "
+            "commands to obey."
+        ),
+        code_location="agents/guards.py — InstructionPrecedenceGuard",
+        fix_description=(
+            "At every stage where an agent reads request metadata, check "
+            "for override keys and refuse to let them disable a policy "
+            "check. The guard already exists in the defended pipeline; "
+            "this defense makes it mandatory for the insecure path too.\n\n"
+            "```python\n"
+            "# In agent_approver, before honoring any metadata:\n"
+            "if metadata.get('bypass_budget_check') or metadata.get('priority_override'):\n"
+            "    # Do NOT skip the budget check — log and enforce policy\n"
+            "    ...\n"
+            "```"
+        ),
+        category=ViolationCategory.CONFLICTING_INSTRUCTIONS,
+    )
+
+
+def _defense_credit_limit(v: PolicyViolation) -> Defense:
+    return Defense(
+        name="Per-Vendor Credit Limit Enforcement",
+        description=(
+            "Before executing a purchase, re-validate the amount against "
+            "the canonical per-vendor credit limit held in the vendor "
+            "registry — never against the max_credit value that arrived "
+            "inside tool output."
+        ),
+        code_location="agents/pipeline.py — agent_purchaser()",
+        fix_description=(
+            "Look up VENDOR_CATALOG[vendor_id]['max_credit'] and reject "
+            "the purchase if amount exceeds it, regardless of what any "
+            "tool claimed.\n\n"
+            "```python\n"
+            "# In agent_purchaser, before submit_purchase:\n"
+            "from agents.tools import VENDOR_CATALOG\n"
+            "max_credit = VENDOR_CATALOG.get(vendor_id, {}).get('max_credit', 0)\n"
+            "if amount > max_credit:\n"
+            "    request['purchase_result'] = {\n"
+            "        'status': 'rejected',\n"
+            "        'reason': f'Exceeds canonical vendor credit limit ${max_credit}',\n"
+            "    }\n"
+            "    ...\n"
+            "```"
+        ),
+        category=ViolationCategory.POLICY_EXCEED_LIMIT,
+    )
+
+
 DEFENSE_FACTORIES = {
     ViolationCategory.TRUST_BOUNDARY: _defense_trust_boundary,
     ViolationCategory.AUTH_BYPASS: _defense_auth_bypass,
     ViolationCategory.DECEPTIVE_TOOL_OUTPUT: _defense_deceptive_output,
     ViolationCategory.SOCIAL_ENGINEERING: _defense_social_engineering,
     ViolationCategory.MISSING_VALIDATION: _defense_trust_boundary,
-    ViolationCategory.CONFLICTING_INSTRUCTIONS: _defense_trust_boundary,
+    ViolationCategory.CONFLICTING_INSTRUCTIONS: _defense_conflicting_instructions,
+    ViolationCategory.POLICY_EXCEED_LIMIT: _defense_credit_limit,
 }
 
 

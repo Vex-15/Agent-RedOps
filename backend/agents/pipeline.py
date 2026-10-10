@@ -22,8 +22,8 @@ from __future__ import annotations
 from typing import Any
 import uuid
 
-from core.types import AgentRole, EventKind, TraceEvent
-from agents.tools import call_tool, APPROVAL_LEDGER
+from core.types import AgentRole, EventKind, TraceEvent, Severity, PolicyViolation, ViolationCategory
+from agents.tools import call_tool, APPROVAL_LEDGER, VENDOR_CATALOG
 from agents.guards import (
     AuthoritativeRegistryGuard,
     StrictEntityBindingGuard,
@@ -64,6 +64,7 @@ def agent_requester(
         },
         output_data={"forwarded_to": "vendor_lookup"},
         trusted=not has_conflicting_instruction,
+        unverified_source=has_conflicting_instruction,
         metadata={"injected_instruction": has_conflicting_instruction}
     ))
 
@@ -125,6 +126,7 @@ def agent_vendor_lookup(
             input_data={"vendor_id": vendor_id},
             output_data=vendor_info,
             trusted=vendor_info.get("verified", False) and not any(not e.trusted for e in tool_events),
+            unverified_source=any(not e.trusted for e in tool_events),
             metadata={"trusted_tool_output_assumed": True}
         ))
 
@@ -347,7 +349,70 @@ def agent_purchaser(
         action="purchase_completed",
         input_data={"vendor_id": vendor_id, "amount": amount},
         output_data=purchase_result,
-        trusted=purchase_result.get("status") == "executed"
+        trusted=purchase_result.get("status") == "executed",
+        unverified_source=any(not e.trusted for e in events),
+    ))
+
+    return request, events
+
+
+# ── Agent: Auditor ─────────────────────────────────────────────────────
+
+def agent_auditor(
+    request: dict[str, Any],
+    overrides: dict | None = None,
+    defended: bool = False,
+) -> tuple[dict[str, Any], list[TraceEvent]]:
+    """
+    Post-execution compliance review.
+
+    Produces a deterministic audit verdict based only on what the
+    trace actually shows, so downstream analyzers have a single
+    authoritative record of what happened:
+      - whether the purchase was executed / skipped / blocked
+      - which approval token (if any) was used
+      - whether the vendor matches the authoritative catalog
+    """
+    events: list[TraceEvent] = []
+
+    vendor_id = request.get("vendor_id", "")
+    amount = request.get("amount", 0)
+    canonical = VENDOR_CATALOG.get(vendor_id)
+
+    purchase_result = request.get("purchase_result", {})
+    purchase_status = purchase_result.get("status", "skipped")
+    approval = request.get("approval", {})
+    approval_id = approval.get("approval_id")
+
+    # Ground truth the defender can rely on post-hoc: is this vendor
+    # actually in the authoritative catalog and verified there?
+    provenance_ok = bool(canonical) and bool(canonical.get("verified", False))
+
+    verdict_bits = {
+        "purchase_status": purchase_status,
+        "approval_id": approval_id,
+        "vendor_id": vendor_id,
+        "vendor_canonical": bool(canonical),
+        "vendor_verified_per_catalog": provenance_ok,
+        "amount": amount,
+    }
+
+    events.append(TraceEvent(
+        agent=AgentRole.AUDITOR,
+        kind=EventKind.POLICY_CHECK,
+        action="post_execution_audit",
+        input_data={
+            "vendor_id": vendor_id,
+            "amount": amount,
+            "purchase_status": purchase_status,
+        },
+        output_data=verdict_bits,
+        trusted=True,
+        metadata={
+            "audit_scope": "post_execution",
+            "provenance_ok": provenance_ok,
+            "purchase_executed": purchase_status == "executed",
+        },
     ))
 
     return request, events
@@ -379,6 +444,10 @@ def run_procurement_pipeline(
 
     # Stage 4: Purchaser
     request, events = agent_purchaser(request, overrides=tool_overrides, defended=defended)
+    all_events.extend(events)
+
+    # Stage 5: Auditor (post-execution review)
+    request, events = agent_auditor(request, overrides=tool_overrides, defended=defended)
     all_events.extend(events)
 
     return request, all_events

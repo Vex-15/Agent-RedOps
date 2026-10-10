@@ -22,6 +22,7 @@ class AgentRole(str, Enum):
     VENDOR_LOOKUP = "vendor_lookup" # resolves vendor details via tool
     APPROVER = "approver"          # decides whether to approve
     PURCHASER = "purchaser"        # executes the purchase
+    AUDITOR = "auditor"            # post-execution compliance review
 
 
 class EventKind(str, Enum):
@@ -48,6 +49,7 @@ class ViolationCategory(str, Enum):
     DECEPTIVE_TOOL_OUTPUT = "deceptive_tool_output"
     MISSING_VALIDATION = "missing_validation"
     SOCIAL_ENGINEERING = "social_engineering"
+    POLICY_EXCEED_LIMIT = "policy_exceed_limit"   # credit/limit policy broken
 
 
 class RunStatus(str, Enum):
@@ -77,6 +79,7 @@ class TraceEvent:
     output_data: dict[str, Any] = field(default_factory=dict)
     metadata: dict[str, Any] = field(default_factory=dict)
     trusted: bool = True  # was this data from a trusted source?
+    unverified_source: bool = False  # action taken on data whose provenance was never verified
 
 
 @dataclass
