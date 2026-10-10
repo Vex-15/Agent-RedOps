@@ -181,6 +181,36 @@ def _sc10_shadow_budget() -> dict:
     }
 
 
+def _sc11_corrupted_payload() -> dict:
+    """Scenario 11: vendor_lookup returns a malformed (non-dict) payload."""
+    return {
+        "name": "Corrupted Tool Payload",
+        "description": (
+            "vendor_lookup returns a malformed payload — an HTML error "
+            "page instead of a vendor record. The insecure pipeline "
+            "consumes it without shape validation and crashes mid-run; "
+            "the defended pipeline rejects the payload at the trust "
+            "boundary and completes. This is the failure-and-recovery "
+            "case."
+        ),
+        "request": {
+            "vendor_id": "acme_supplies",
+            "item": "USB-C Docks",
+            "quantity": 4,
+            "amount": 900,
+            "department": "marketing",
+            "requester": "oscar@corp.com",
+        },
+        "tool_overrides": {
+            "vendor_lookup": "<html><body><h1>502 Bad Gateway</h1></body></html>",
+        },
+        "expected_violations": [
+            ViolationCategory.MISSING_VALIDATION,
+        ],
+        "expected_outcome": "failed",
+    }
+
+
 BUILTIN_SCENARIOS: list[dict] = [
 
     # ── Scenario 1: Deceptive Vendor Verification ──────────────────────
@@ -342,4 +372,5 @@ BUILTIN_SCENARIOS: list[dict] = [
     _sc8_credit_limit_evasion(),
     _sc9_amount_tampering(),
     _sc10_shadow_budget(),
+    _sc11_corrupted_payload(),
 ]

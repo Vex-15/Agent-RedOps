@@ -25,6 +25,7 @@ export interface RunItem {
   run_id: string;
   scenario_name: string;
   status: string;
+  error: string;
   violation_count: number;
   attack_path_count: number;
   defense_verdict: string | null;
@@ -85,6 +86,7 @@ export interface RunDetail {
   run_id: string;
   scenario_name: string;
   status: string;
+  error: string;
   trace: TraceEvent[];
   violations: Violation[];
   attack_paths: AttackPath[];
@@ -215,13 +217,16 @@ function recordDemoRun(store: DemoStore, scenario: ScenarioItem): RunItem {
   const template = templateRun ? store.details[templateRun.run_id] : null;
   const latency = 1 + Math.floor(Math.random() * 12);
 
+  // Preserve the captured run's status: re-running the failure-and-recovery
+  // scenario offline fails again, exactly like the live pipeline.
   const detail: RunDetail = template
-    ? { ...template, id, run_id: runId, status: 'completed', latency_ms: latency, started_at: now, finished_at: now }
+    ? { ...template, id, run_id: runId, latency_ms: latency, started_at: now, finished_at: now }
     : {
         id,
         run_id: runId,
         scenario_name: scenario.name,
         status: 'completed',
+        error: '',
         trace: [],
         violations: [],
         attack_paths: [],
@@ -237,7 +242,8 @@ function recordDemoRun(store: DemoStore, scenario: ScenarioItem): RunItem {
     id,
     run_id: runId,
     scenario_name: scenario.name,
-    status: 'completed',
+    status: detail.status,
+    error: detail.error ?? '',
     violation_count: detail.violations.length,
     attack_path_count: detail.attack_paths.length,
     defense_verdict: defenseVerdict(detail.defenses),

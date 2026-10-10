@@ -38,7 +38,9 @@ def dashboard_metrics(runs, details, scenario_count):
                 blocked += 1
             elif dfc["verdict"] == "bypassed":
                 bypassed += 1
-        if len(violations) == 0:
+        if (r.get("status") or "").lower() == "failed":
+            outcome = "failed"
+        elif len(violations) == 0:
             outcome = "clean"
         elif d["defenses"] and all(x["verdict"] == "blocked" for x in d["defenses"]):
             outcome = "defended"

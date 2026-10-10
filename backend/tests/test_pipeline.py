@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from scenarios.builtin import BUILTIN_SCENARIOS
 from scenarios.runner import run_scenario
-from core.types import RunStatus, DefenseVerdict, ViolationCategory, AgentRole
+from core.types import RunStatus, DefenseVerdict, ViolationCategory, AgentRole, EventKind
 
 
 class TestDeceptiveVendor:
@@ -175,6 +175,9 @@ class TestAuditorStage:
     def test_every_scenario_produces_audit_event(self):
         for scenario in BUILTIN_SCENARIOS:
             result = run_scenario(scenario)
+            if result.status == RunStatus.FAILED:
+                # Crashed mid-pipeline by design (failure-and-recovery case)
+                continue
             audit_events = [e for e in result.trace if e.agent == AgentRole.AUDITOR]
             assert len(audit_events) == 1, f"scenario '{scenario['name']}' missing audit event"
             assert audit_events[0].trusted is True
@@ -269,7 +272,9 @@ class TestDefendedPipelineIsClean:
     def test_every_scenario_is_neutralized_when_defended(self):
         for scenario in BUILTIN_SCENARIOS:
             result = run_scenario(scenario)
-            assert result.status == RunStatus.COMPLETED, scenario["name"]
+            # FAILED is a legitimate outcome for the failure-and-recovery
+            # scenario; its defended re-run must still block.
+            assert result.status in (RunStatus.COMPLETED, RunStatus.FAILED), scenario["name"]
             for d in result.defenses:
                 assert d.verdict == DefenseVerdict.BLOCKED, (
                     f"{scenario['name']}: defense '{d.defense.name}' "
@@ -281,3 +286,40 @@ class TestDefendedPipelineIsClean:
         result = run_scenario(BUILTIN_SCENARIOS[3])
         assert len(result.violations) == 0
         assert len(result.defenses) == 0
+
+
+class TestCorruptedPayloadFailureAndRecovery:
+    """Scenario 11: insecure run fails on a malformed payload,
+    the defended run rejects it at the boundary and recovers."""
+
+    def setup_method(self):
+        self.result = run_scenario(BUILTIN_SCENARIOS[10])
+
+    def test_pipeline_reports_failure(self):
+        assert self.result.status == RunStatus.FAILED
+        assert self.result.error  # message captured, not a bare 500
+
+    def test_error_event_recorded_in_trace(self):
+        errors = [e for e in self.result.trace if e.kind == EventKind.ERROR]
+        assert len(errors) >= 1
+        assert "error" in errors[0].output_data
+
+    def test_partial_trace_preserved(self):
+        actions = [e.action for e in self.result.trace]
+        assert "initiate_request" in actions
+
+    def test_crash_recorded_as_finding(self):
+        titles = [v.title for v in self.result.violations]
+        assert "Pipeline crashed on malformed tool payload" in titles
+        crash = self.result.violations[0]
+        assert crash.severity.value == "critical"
+        assert len(crash.evidence_event_ids) > 0
+
+    def test_defended_rerun_recovers(self):
+        """The defended pipeline must complete and block the crash path."""
+        assert len(self.result.defenses) == 1
+        assert self.result.defenses[0].verdict == DefenseVerdict.BLOCKED
+
+    def test_attack_path_built_from_error(self):
+        assert len(self.result.attack_paths) >= 1
+        assert self.result.attack_paths[0].length >= 1

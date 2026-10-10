@@ -15,6 +15,9 @@ multi-agent workflows. They break attack paths at specific trust boundaries:
 
 from __future__ import annotations
 from typing import Any
+
+import neatlogs
+
 from core.types import TraceEvent, EventKind, AgentRole
 from agents.tools import VENDOR_CATALOG, APPROVAL_LEDGER
 
@@ -33,6 +36,7 @@ class AuthoritativeRegistryGuard:
     Prevents unverified vendors from posing as verified through deceptive tool outputs.
     """
     @staticmethod
+    @neatlogs.span(kind="GUARDRAIL", name="AuthoritativeRegistryGuard", capture_output=False)
     def inspect_vendor_lookup(vendor_id: str, tool_result: dict[str, Any]) -> tuple[dict[str, Any], DefenseGuardReport, TraceEvent]:
         real_entry = VENDOR_CATALOG.get(vendor_id)
         
@@ -112,6 +116,7 @@ class StrictEntityBindingGuard:
     Mitigates social engineering and brand masquerading attacks.
     """
     @staticmethod
+    @neatlogs.span(kind="GUARDRAIL", name="StrictEntityBindingGuard", capture_output=False)
     def inspect_identity(vendor_id: str, tool_result: dict[str, Any]) -> tuple[dict[str, Any], DefenseGuardReport, TraceEvent]:
         real_entry = VENDOR_CATALOG.get(vendor_id, {})
         canonical_name = real_entry.get("name", vendor_id)
@@ -166,6 +171,7 @@ class StrictBudgetGuard:
     }
 
     @classmethod
+    @neatlogs.span(kind="GUARDRAIL", name="StrictBudgetGuard", capture_output=False)
     def inspect_budget(cls, department: str, amount: float, tool_result: dict[str, Any], request_metadata: dict[str, Any]) -> tuple[bool, DefenseGuardReport, TraceEvent]:
         # Rule 1: Check for conflicting instructions trying to bypass budget
         if request_metadata.get("bypass_budget_check") or request_metadata.get("priority_override"):
@@ -230,6 +236,7 @@ class CryptographicLedgerGuard:
     Ensures separation of duties by verifying approval ledger presence, amount cap, and vendor match.
     """
     @staticmethod
+    @neatlogs.span(kind="GUARDRAIL", name="CryptographicLedgerGuard", capture_output=False)
     def verify_approval(approval_id: str | None, vendor_id: str, amount: float) -> tuple[bool, str, TraceEvent]:
         if not approval_id:
             event = TraceEvent(
@@ -301,6 +308,7 @@ class CanonicalCreditLimitGuard:
     reads VENDOR_CATALOG directly and fails closed for unknown vendors.
     """
     @staticmethod
+    @neatlogs.span(kind="GUARDRAIL", name="CanonicalCreditLimitGuard", capture_output=False)
     def inspect_purchase(vendor_id: str, amount: float) -> tuple[bool, DefenseGuardReport, TraceEvent]:
         canonical = VENDOR_CATALOG.get(vendor_id)
 
@@ -374,6 +382,7 @@ class PayloadIntegrityGuard:
     of crashing whichever agent consumes it.
     """
     @staticmethod
+    @neatlogs.span(kind="GUARDRAIL", name="PayloadIntegrityGuard", capture_output=False)
     def inspect_payload(
         tool_name: str,
         payload: Any,
