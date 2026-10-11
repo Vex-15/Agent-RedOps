@@ -4,7 +4,7 @@
  * sharp angular crown — layered back-to-front so it reads as a 3D asset.
  * The wrapper’s `.scene` (perspective) plus `Tilt` in Landing.tsx gives it depth.
  */
-export function HeroShield({ className = '' }: { className?: string }) {
+export function HeroShieldLegacy({ className = '' }: { className?: string }) {
   return (
     <div className={`relative flex items-center justify-center ${className}`}>
       {/* soft halo */}
@@ -80,6 +80,118 @@ export function HeroShield({ className = '' }: { className?: string }) {
       </svg>
 
       {/* floating deco blocks */}
+      <span className="absolute top-8 right-16 w-3 h-3 bg-crimson" />
+      <span className="absolute top-1/2 right-8 w-2 h-2 bg-crimson/80" />
+      <span className="absolute bottom-20 left-8 w-2.5 h-2.5 bg-crimson/70" />
+      <span className="absolute bottom-10 left-24 w-2 h-2 bg-ink/30" />
+      <span className="absolute top-1/3 left-4 w-2 h-2 bg-crimson/40" />
+      <span className="absolute bottom-1/3 right-12 w-2.5 h-2.5 bg-ink/20" />
+    </div>
+  );
+}
+
+export function HeroShield({ className = '' }: { className?: string }) {
+  return (
+    <div className={`relative flex items-center justify-center ${className}`}>
+      <div className="absolute w-72 h-72 rounded-full bg-crimson/10 blur-3xl" />
+      <div className="absolute w-96 h-96 rounded-full bg-crimson/5 blur-3xl" />
+
+      <svg
+        width="400"
+        height="440"
+        viewBox="0 0 400 440"
+        fill="none"
+        className="relative drop-shadow-2xl max-w-full h-auto"
+      >
+        <defs>
+          <linearGradient id="hoodL" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stopColor="#ff3838" />
+            <stop offset=".48" stopColor="#b90912" />
+            <stop offset="1" stopColor="#35070b" />
+          </linearGradient>
+          <linearGradient id="hoodR" x1="1" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="#ff242b" />
+            <stop offset=".45" stopColor="#8d0810" />
+            <stop offset="1" stopColor="#200509" />
+          </linearGradient>
+          <linearGradient id="crownL" x1="0" y1="0" x2="1" y2="1">
+            <stop stopColor="#ff292e" />
+            <stop offset="1" stopColor="#6e080e" />
+          </linearGradient>
+          <linearGradient id="crownR" x1="0" y1="0" x2="1" y2="1">
+            <stop stopColor="#e91b24" />
+            <stop offset="1" stopColor="#4c060b" />
+          </linearGradient>
+          <linearGradient id="faceL" x1="0" y1="0" x2="1" y2="1">
+            <stop stopColor="#a30d16" />
+            <stop offset="1" stopColor="#25070b" />
+          </linearGradient>
+          <linearGradient id="faceR" x1="0" y1="0" x2="1" y2="1">
+            <stop stopColor="#62070e" />
+            <stop offset="1" stopColor="#170407" />
+          </linearGradient>
+          <linearGradient id="eye" x1="0" y1="0" x2="0" y2="1">
+            <stop stopColor="#fff" />
+            <stop offset=".55" stopColor="#ffb4b4" />
+            <stop offset="1" stopColor="#ff171f" />
+          </linearGradient>
+          <filter id="glow" x="-100%" y="-100%" width="300%" height="300%">
+            <feGaussianBlur stdDeviation="5" />
+          </filter>
+        </defs>
+
+        <path fill="#230508" d="M200 14 106 92 49 174 77 211 61 248 102 301 200 411 298 301 339 248 323 211 351 174 294 92Z" />
+        <path fill="url(#hoodL)" d="M200 14 106 92 49 174 122 156 161 95Z" />
+        <path fill="#780810" d="M200 14 161 95 122 156 181 139Z" />
+        <path fill="url(#hoodR)" d="M200 14 294 92 351 174 278 156 239 95Z" />
+        <path fill="#5a070d" d="M200 14 239 95 278 156 219 139Z" />
+
+        <path fill="url(#crownL)" d="M200 39 119 103 77 165 151 139 200 101Z" />
+        <path fill="#e31a23" d="M119 103 151 139 200 101 200 39Z" />
+        <path fill="#a80b14" d="M200 39 281 103 323 165 249 139 200 101Z" />
+        <path fill="url(#crownR)" d="M200 39 249 139 281 103Z" />
+
+        <path fill="#3a070b" d="M77 165 151 139 200 101 183 173 127 208 94 236 61 211Z" />
+        <path fill="#a60c16" d="M77 165 151 139 183 173 127 208 94 236Z" />
+        <path fill="#ed2029" d="M77 165 151 139 127 208 94 236Z" />
+        <path fill="#1e0508" d="M323 165 249 139 200 101 217 173 273 208 306 236 339 211Z" />
+        <path fill="#790811" d="M323 165 249 139 217 173 273 208 306 236Z" />
+        <path fill="#c7141d" d="M323 165 249 139 273 208 306 236Z" />
+
+        <path fill="url(#faceL)" d="M127 208 183 173 200 190 200 411 118 314 94 264Z" />
+        <path fill="url(#faceR)" d="M273 208 217 173 200 190 200 411 282 314 306 264Z" />
+        <path fill="#f32a31" d="M200 101 183 173 200 190 217 173Z" />
+        <path fill="#68080f" d="M200 101 200 190 183 173Z" />
+
+        <path fill="#120407" d="M111 218 158 188 196 207 163 246 119 248Z" />
+        <path fill="#120407" d="M289 218 242 188 204 207 237 246 281 248Z" />
+        <path fill="#ff1d2b" opacity=".75" filter="url(#glow)" d="M120 219 162 208 183 221 151 235Z" />
+        <path fill="#ff1d2b" opacity=".75" filter="url(#glow)" d="M280 219 238 208 217 221 249 235Z" />
+        <path fill="url(#eye)" d="M119 215 158 207 183 221 150 229 129 225Z" />
+        <path fill="#fff" d="M124 216 158 210 175 220 149 224Z" />
+        <path fill="url(#eye)" d="M281 215 242 207 217 221 250 229 271 225Z" />
+        <path fill="#fff" d="M276 216 242 210 225 220 251 224Z" />
+
+        <path fill="#b5121c" d="M94 236 127 208 150 242 143 284 108 300 77 266Z" />
+        <path fill="#51080e" d="M127 208 163 246 143 284 150 242Z" />
+        <path fill="#e21b25" d="M94 236 108 300 77 266Z" />
+        <path fill="#870b14" d="M306 236 273 208 250 242 257 284 292 300 323 266Z" />
+        <path fill="#36060b" d="M273 208 237 246 257 284 250 242Z" />
+        <path fill="#b20d18" d="M306 236 292 300 323 266Z" />
+
+        <path fill="#4c080e" d="M108 300 143 284 200 326 200 411 153 354Z" />
+        <path fill="#170407" d="M143 284 200 326 200 411 181 345Z" />
+        <path fill="#650810" d="M292 300 257 284 200 326 200 411 247 354Z" />
+        <path fill="#260508" d="M257 284 200 326 200 411 219 345Z" />
+        <path fill="#1c0407" d="M200 190 183 256 200 280 217 256Z" />
+        <path fill="#a20d17" d="M200 190 200 280 183 256Z" />
+        <path fill="#ef1b27" d="M200 280 181 345 200 411 219 345Z" />
+        <path fill="#4a060c" d="M200 280 200 411 181 345Z" />
+
+        <path d="M106 92 119 103 151 139M294 92 281 103 249 139" fill="none" stroke="#ff5555" strokeOpacity=".6" strokeWidth="1.5" />
+        <path d="M94 236 108 300 153 354M306 236 292 300 247 354" fill="none" stroke="#fa3038" strokeOpacity=".45" strokeWidth="1.5" />
+      </svg>
+
       <span className="absolute top-8 right-16 w-3 h-3 bg-crimson" />
       <span className="absolute top-1/2 right-8 w-2 h-2 bg-crimson/80" />
       <span className="absolute bottom-20 left-8 w-2.5 h-2.5 bg-crimson/70" />
