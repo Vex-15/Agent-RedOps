@@ -642,10 +642,98 @@ export default function Landing() {
           <DemoConsole />
         </section>
 
+        {/* ── Section 04: Proposed pricing ── */}
+        <section id="pricing" className="section max-w-7xl mx-auto px-6">
+          <div className="section-head grid lg:grid-cols-2 gap-6 items-end">
+            <div>
+              <div className="section-num mb-3">04</div>
+              <h2 className="font-display text-2xl sm:text-3xl xl:text-4xl leading-tight">
+                SECURITY THAT <span className="text-crimson">SCALES</span>
+              </h2>
+            </div>
+            <p className="text-muted leading-relaxed max-w-md lg:justify-self-end">
+              Start testing AI-agent security for free. Scale when your team is ready.
+            </p>
+          </div>
+
+          <div className="mb-8 flex items-start gap-3 border border-crimson-soft bg-crimson-faint/50 p-4 text-sm text-muted">
+            <span className="mt-1 h-2 w-2 shrink-0 bg-crimson" />
+            <p>
+              <span className="font-semibold text-ink">Proposed pricing plan.</span> All plans are projections and
+              subject to validation. Feature availability, usage limits, and managed-service costs will be confirmed
+              before paid launch.
+            </p>
+          </div>
+
+          <Reveal stagger className="grid md:grid-cols-2 xl:grid-cols-4 gap-5">
+            {[
+              {
+                name: 'Community',
+                price: 'Free',
+                audience: 'For developers exploring agent security.',
+                features: ['Local security scenarios', 'Basic findings and remediation guidance', 'Local execution history', 'Community support'],
+              },
+              {
+                name: 'Pro',
+                price: '₹1,499',
+                suffix: '/month',
+                audience: 'For developers building production AI agents.',
+                features: ['Expanded scenario library', 'Trace history and report exports', 'Advanced security findings', 'CI workflow integrations'],
+              },
+              {
+                name: 'Team',
+                price: '₹7,499',
+                suffix: '/month',
+                audience: 'For teams securing agentic applications together.',
+                features: ['Shared workspaces', 'Team collaboration and run history', 'Centralized findings and reporting', 'Team-level integrations and access controls'],
+              },
+              {
+                name: 'Enterprise',
+                price: 'Custom',
+                audience: 'For organizations with advanced security requirements.',
+                features: ['Enterprise access controls and audit capabilities', 'Private deployment options, subject to implementation', 'Custom integrations', 'Dedicated support'],
+              },
+            ].map((plan) => (
+              <Tilt key={plan.name} max={6} scale={1.01}>
+                <div className={`panel panel-shadow face-lift p-6 flex flex-col h-full ${plan.name === 'Pro' ? 'border-crimson/45' : ''}`}>
+                  <div className="flex items-start justify-between gap-3">
+                    <h3 className="font-display text-xl text-ink">{plan.name}</h3>
+                    {plan.name === 'Pro' && (
+                      <span className="font-mono text-[9px] tracking-[0.16em] text-crimson border border-crimson-soft px-2 py-1">
+                        SCALE
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-6 flex items-baseline gap-1">
+                    <span className="font-display text-3xl text-crimson">{plan.price}</span>
+                    {plan.suffix && <span className="text-xs text-muted">{plan.suffix}</span>}
+                  </div>
+                  <p className="mt-3 min-h-[3.5rem] text-sm text-muted leading-relaxed">{plan.audience}</p>
+                  <ul className="mt-6 space-y-3 border-t border-line pt-5 text-sm text-muted">
+                    {plan.features.map((feature) => (
+                      <li key={feature} className="flex gap-2">
+                        <span className="text-crimson">✓</span>
+                        <span>{feature}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <a href="#/console" className="btn-secondary mt-7 w-full justify-center">
+                    {plan.name === 'Enterprise' ? 'Talk to us' : plan.name === 'Community' ? 'Start free' : 'Explore plan'} <ArrowRight />
+                  </a>
+                </div>
+              </Tilt>
+            ))}
+          </Reveal>
+
+          <p className="mt-8 text-center font-mono text-[10px] uppercase tracking-[0.18em] text-muted">
+            Start free · Test continuously · Ship safer agents
+          </p>
+        </section>
+
         {/* ── CTA ── */}
         <section className="section max-w-7xl mx-auto px-6 lg:grid-cols-2 grid gap-12 items-center">
           <div>
-            <div className="section-num mb-3">04</div>
+            <div className="section-num mb-3">05</div>
             <h2 className="font-display text-4xl sm:text-5xl xl:text-6xl leading-tight">
               TRUST,<br />
               BUT <span className="text-crimson">TEST.</span>
