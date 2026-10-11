@@ -27,7 +27,7 @@ export default function Docs() {
   return (
     <div className="min-h-screen bg-paper text-ink">
       <header className="sticky top-0 z-40 bg-paper/85 backdrop-blur border-b border-line">
-        <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 min-h-14 flex items-center justify-between gap-3">
           <a href="#/" className="flex items-center"><Logo /></a>
           <nav className="hidden md:flex items-center gap-6 text-sm text-muted">
             <a href="#/" className="hover:text-ink transition-colors">Product</a>
@@ -37,8 +37,8 @@ export default function Docs() {
             <a href="#/#pricing" className="hover:text-ink transition-colors">Pricing</a>
             <a href="#/console" className="hover:text-ink transition-colors">Console</a>
           </nav>
-          <a href="#/live" className="bg-ink text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-crimson transition-colors">
-            Test an agent →
+          <a href="#/live" className="bg-ink text-white text-xs sm:text-sm font-medium px-2.5 sm:px-4 py-2 rounded-lg whitespace-nowrap hover:bg-crimson transition-colors">
+            <span className="sm:hidden">Test →</span><span className="hidden sm:inline">Test an agent →</span>
           </a>
         </div>
       </header>
@@ -46,7 +46,7 @@ export default function Docs() {
       <main>
         <section className="relative overflow-hidden border-b border-line">
           <div className="absolute inset-0 grid-bg opacity-50 pointer-events-none" aria-hidden="true" />
-          <div className="max-w-7xl mx-auto px-6 py-20 lg:py-28 relative">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-20 lg:py-24 relative">
             <div className="eyebrow mb-5">RedOps Documentation</div>
             <h1 className="font-display text-5xl sm:text-6xl xl:text-7xl leading-[1.02] max-w-3xl">
               BUILD SAFER<br /><span className="text-crimson">AGENTS.</span>
@@ -63,7 +63,7 @@ export default function Docs() {
           </div>
         </section>
 
-        <div className="max-w-7xl mx-auto px-6 grid lg:grid-cols-[220px_1fr] gap-12 lg:gap-20 py-16">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 grid lg:grid-cols-[220px_1fr] gap-10 lg:gap-16 py-16">
           <aside className="lg:sticky lg:top-24 self-start">
             <div className="section-num mb-4">INDEX</div>
             <nav className="flex lg:flex-col gap-3 flex-wrap text-sm text-muted">

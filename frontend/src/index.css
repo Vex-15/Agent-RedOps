@@ -47,6 +47,8 @@ body {
   background-color: var(--color-paper);
   color: var(--color-ink);
   font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.55;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -59,6 +61,7 @@ body {
   background: var(--color-panel);
   border: 1px solid var(--color-line);
   border-radius: 12px;
+  min-width: 0;
 }
 
 .panel-shadow {
@@ -82,6 +85,7 @@ body {
   color: #fff;
   font-weight: 600;
   font-size: 14px;
+  min-height: 42px;
   padding: 10px 20px;
   border-radius: 8px;
   transition:
@@ -106,6 +110,7 @@ body {
   color: var(--color-ink);
   font-weight: 600;
   font-size: 14px;
+  min-height: 42px;
   padding: 10px 20px;
   border-radius: 8px;
   border: 1px solid var(--color-line-strong);
@@ -160,20 +165,24 @@ body {
    One scale for every major section so the page scrolls
    as deliberate chapters instead of stacked blocks.      */
 .section {
-  /* Major section top/bottom padding: 112–160px on desktop,
-     scaled down fluidly on tablet/mobile. */
-  padding-block: clamp(88px, 11vw, 160px);
+  padding-block: clamp(64px, 8vw, 112px);
 }
 
-/* Hero fills the viewport on desktop and breathes on mobile. */
 .hero {
-  padding-block: clamp(64px, 9vw, 120px);
+  padding-block: clamp(56px, 7vw, 96px);
 }
 @media (min-width: 1024px) {
   .hero {
-    min-height: 92vh;
     display: flex;
     align-items: center;
+  }
+}
+@media (max-width: 640px) {
+  .section {
+    padding-block: 72px;
+  }
+  .hero {
+    padding-block: 64px 72px;
   }
 }
 
@@ -185,6 +194,8 @@ body {
 /* Extra running room under intro copy before its content. */
 .lede-copy {
   margin-top: clamp(24px, 3vw, 32px);
+  font-size: 1rem;
+  line-height: 1.7;
 }
 
 /* ── Motion system ────────────────────────────────────────
@@ -244,6 +255,10 @@ body {
     0 1px 2px rgba(26, 29, 33, 0.04),
     0 18px 40px -12px rgba(124, 29, 29, 0.18),
     0 40px 80px -40px rgba(26, 29, 33, 0.25);
+}
+.face-lift:hover {
+  transform: translateY(-4px);
+  transition: transform 220ms var(--ease-out-expo), border-color 220ms ease, box-shadow 220ms ease;
 }
 
 /* Ambient float for hero art and floating chips. */

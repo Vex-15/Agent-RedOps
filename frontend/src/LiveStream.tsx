@@ -304,23 +304,24 @@ export default function LiveStream() {
     <div className="min-h-screen bg-paper text-ink">
       {/* ── Header ── */}
       <header className="sticky top-0 z-40 bg-paper/85 backdrop-blur border-b border-line">
-        <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 min-h-14 flex items-center justify-between gap-3">
           <a href="#/" className="flex items-center">
             <Logo />
           </a>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <span
-              className={`text-[11px] font-mono px-2 py-0.5 rounded border ${
+              className={`text-[10px] sm:text-[11px] font-mono px-1.5 sm:px-2 py-0.5 rounded border whitespace-nowrap ${
                 live
                   ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
                   : 'border-crimson/25 bg-crimson-faint text-crimson'
               }`}
             >
-              {checked ? (live ? 'stream connected' : 'backend offline') : 'connecting…'}
+              <span className="sm:hidden">{checked ? (live ? 'live' : 'offline') : '…'}</span>
+              <span className="hidden sm:inline">{checked ? (live ? 'stream connected' : 'backend offline') : 'connecting…'}</span>
             </span>
             <a
               href="#/console"
-              className="text-sm font-medium border border-line-strong px-3.5 py-1.5 rounded-lg hover:border-crimson hover:text-crimson transition-colors"
+              className="text-xs sm:text-sm font-medium border border-line-strong px-2.5 sm:px-3.5 py-1.5 rounded-lg whitespace-nowrap hover:border-crimson hover:text-crimson transition-colors"
             >
               Open Console
             </a>
@@ -334,7 +335,7 @@ export default function LiveStream() {
         <div className="absolute inset-x-0 top-0 h-full overflow-hidden" aria-hidden="true">
           <div className="scanline" />
         </div>
-        <div className="relative max-w-7xl mx-auto px-6 py-12 lg:py-16">
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 py-12 lg:py-16">
           <div className="eyebrow mb-4 wipe-in">Real-time execution</div>
           <h1 className="font-display text-4xl sm:text-5xl xl:text-6xl leading-[1.05]">
             LIVE <span className="text-crimson">STREAM</span>
@@ -348,7 +349,7 @@ export default function LiveStream() {
       </section>
 
       {/* ── Controls ── */}
-      <section className="max-w-7xl mx-auto px-6 pt-8">
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 pt-8">
         {!live && checked && (
           <div className="mb-6 flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-800">
             <span aria-hidden="true" className="mt-0.5">
@@ -487,9 +488,9 @@ export default function LiveStream() {
       </section>
 
       {/* ── Main grid ── */}
-      <section className="max-w-7xl mx-auto px-6 py-8 grid lg:grid-cols-5 gap-6">
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 py-10 lg:py-12 grid xl:grid-cols-5 gap-8">
         {/* Left: phase rail + feed */}
-        <div className="lg:col-span-3 space-y-6">
+        <div className="xl:col-span-3 min-w-0 space-y-6">
           <PhaseRail phase={state.phase} running={running} />
 
           <div className="panel panel-shadow overflow-hidden">
@@ -547,7 +548,7 @@ export default function LiveStream() {
         </div>
 
         {/* Right: HUD */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className="xl:col-span-2 min-w-0 space-y-6">
           <div className="grid grid-cols-2 gap-3">
             <StatTile label="Events" value={counts.total} tone="ink" note={`${counts.insecure} insecure · ${counts.defended} defended`} />
             <StatTile label="Findings" value={counts.findings} tone="red" note="policy violations" />
@@ -655,7 +656,7 @@ export default function LiveStream() {
 
       {/* ── Footer ── */}
       <footer className="border-t border-line py-8 mt-4">
-        <div className="max-w-7xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-muted">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-muted">
           <span>© 2026 RedOps · Live Stream</span>
           <span className="font-mono">
             Simulated environment · deterministic pipeline · no real purchases executed

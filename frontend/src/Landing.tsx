@@ -552,7 +552,7 @@ export default function Landing() {
             </a>
           </div>
 
-          <div className="relative min-h-[320px] lg:min-h-[380px] flex items-center">
+          <div className="relative flex items-center py-4 lg:py-0">
             <LayerPanels className="w-full" />
             <div className="absolute right-0 top-1/2 -translate-y-1/2 hidden xl:flex flex-col gap-3 font-mono text-[10px] font-semibold tracking-[0.18em] text-ink">
               {['ANALYZE', 'FIND ROOT CAUSE', 'GET FIXES'].map((label) => (
@@ -665,7 +665,7 @@ export default function Landing() {
             </p>
           </div>
 
-          <Reveal stagger className="grid md:grid-cols-2 xl:grid-cols-4 gap-5 items-stretch auto-rows-fr">
+          <Reveal stagger className="grid md:grid-cols-2 2xl:grid-cols-4 gap-5 items-stretch auto-rows-fr">
             {[
               {
                 name: 'Community',
