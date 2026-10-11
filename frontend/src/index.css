@@ -20,6 +20,11 @@
   --font-display: "Silkscreen", monospace;
   --font-body: "Inter", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", monospace;
+
+  /* Motion: one easing family so every transition feels like the same hand. */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
 }
 
 body {
@@ -165,4 +170,166 @@ body {
 /* Extra running room under intro copy before its content. */
 .lede-copy {
   margin-top: clamp(24px, 3vw, 32px);
+}
+
+/* ── Motion system ────────────────────────────────────────
+   Scroll reveals, 3D scenes and ambient loops. Everything
+   degrades to a static page under prefers-reduced-motion. */
+
+.reveal {
+  opacity: 0;
+  transform: translateY(26px);
+  transition:
+    opacity 0.85s var(--ease-out-expo),
+    transform 0.85s var(--ease-out-expo);
+  will-change: opacity, transform;
+}
+.reveal.is-visible {
+  opacity: 1;
+  transform: none;
+}
+/* Staggered children: each panel lifts a beat after the last. */
+.reveal-stagger > * {
+  opacity: 0;
+  transform: translateY(26px);
+  transition:
+    opacity 0.8s var(--ease-out-expo),
+    transform 0.8s var(--ease-out-expo);
+}
+.reveal-stagger.is-visible > * {
+  opacity: 1;
+  transform: none;
+}
+.reveal-stagger.is-visible > *:nth-child(1) { transition-delay: 0.04s; }
+.reveal-stagger.is-visible > *:nth-child(2) { transition-delay: 0.12s; }
+.reveal-stagger.is-visible > *:nth-child(3) { transition-delay: 0.2s; }
+.reveal-stagger.is-visible > *:nth-child(4) { transition-delay: 0.28s; }
+.reveal-stagger.is-visible > *:nth-child(5) { transition-delay: 0.36s; }
+.reveal-stagger.is-visible > *:nth-child(6) { transition-delay: 0.44s; }
+
+/* 3D scene: set `perspective` on the parent of a .tilt element. */
+.scene {
+  perspective: 1100px;
+}
+.preserve-3d {
+  transform-style: preserve-3d;
+}
+/* Pointer-driven tilt. The transform is written inline by <Tilt>. */
+.tilt {
+  transition: transform 0.5s var(--ease-out-expo), box-shadow 0.4s var(--ease-out-expo);
+  will-change: transform;
+}
+.tilt-fast {
+  transition: transform 0.12s linear;
+}
+
+/* Raised face used by the 3D layers and cards. */
+.face-lift {
+  box-shadow:
+    0 1px 2px rgba(26, 29, 33, 0.04),
+    0 18px 40px -12px rgba(124, 29, 29, 0.18),
+    0 40px 80px -40px rgba(26, 29, 33, 0.25);
+}
+
+/* Ambient float for hero art and floating chips. */
+.float-slow {
+  animation: float 9s var(--ease-in-out) infinite;
+}
+.float-slower {
+  animation: float 13s var(--ease-in-out) infinite;
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-12px); }
+}
+
+/* Expanding ring used for the live/recording indicator. */
+.ring-pulse::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  border: 1px solid currentColor;
+  animation: pulseRing 1.9s var(--ease-out-expo) infinite;
+}
+@keyframes pulseRing {
+  0% { transform: scale(0.9); opacity: 0.7; }
+  100% { transform: scale(2.6); opacity: 0; }
+}
+
+/* Horizontal sweep for scanline-style hero backdrops. */
+.scanline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 34%;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    rgba(214, 31, 38, 0.07),
+    transparent
+  );
+  animation: scanY 7s linear infinite;
+  pointer-events: none;
+}
+@keyframes scanY {
+  0% { transform: translateY(-120%); }
+  100% { transform: translateY(320%); }
+}
+
+/* Sheen that rakes across primary buttons on hover. */
+.sheen {
+  position: relative;
+  overflow: hidden;
+}
+.sheen::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-120%);
+  background: linear-gradient(
+    100deg,
+    transparent 20%,
+    rgba(255, 255, 255, 0.32) 50%,
+    transparent 80%
+  );
+}
+.sheen:hover::after {
+  animation: shimmer 0.85s var(--ease-out-expo);
+}
+@keyframes shimmer {
+  100% { transform: translateX(120%); }
+}
+
+/* Rows entering a live feed slide in from the top and settle. */
+.row-enter {
+  animation: rowEnter 0.45s var(--ease-out-expo) both;
+}
+@keyframes rowEnter {
+  from { opacity: 0; transform: translateY(-8px) scale(0.985); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Section headings wipe in from behind a crimson rule. */
+.wipe-in {
+  animation: wipeIn 0.9s var(--ease-out-expo) both;
+}
+@keyframes wipeIn {
+  from { opacity: 0; transform: translateX(-14px); clip-path: inset(0 100% 0 0); }
+  to { opacity: 1; transform: none; clip-path: inset(0 0 0 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal,
+  .reveal-stagger > * {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+  .float-slow,
+  .float-slower,
+  .scanline,
+  .ring-pulse::after {
+    animation: none !important;
+  }
 }

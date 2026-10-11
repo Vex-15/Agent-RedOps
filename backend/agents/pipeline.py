@@ -19,7 +19,9 @@ uphold policy supremacy, and block unauthorized actions while allowing legitimat
 """
 
 from __future__ import annotations
-from typing import Any
+from typing import Any, Callable, Iterator
+import contextlib
+import contextvars
 import uuid
 
 import neatlogs
@@ -44,6 +46,60 @@ class PipelineError(RuntimeError):
         self.trace = trace
 
 
+# ── Live event sink ─────────────────────────────────────────────────
+#
+# The pipeline is synchronous, but the console wants to watch it execute
+# in real time.  Rather than threading a callback through every agent, a
+# ContextVar holds an optional sink and `_live_list()` returns a list that
+# notifies it on append/extend.  With no sink installed (the default, and
+# what every test exercises) this is a plain list and nothing changes.
+
+_LIVE_SINK: contextvars.ContextVar[Callable[[TraceEvent], None] | None] = (
+    contextvars.ContextVar("redops_live_sink", default=None)
+)
+
+
+def _notify(event: TraceEvent) -> None:
+    """Hand one trace event to the active sink, if any."""
+    sink = _LIVE_SINK.get()
+    if sink is None:
+        return
+    try:
+        sink(event)
+    except Exception:
+        # A misbehaving stream consumer must never break the pipeline.
+        pass
+
+
+class _LiveEventList(list):
+    """A list that reports every appended trace event to the live sink."""
+
+    def append(self, item):  # type: ignore[override]
+        super().append(item)
+        _notify(item)
+
+    def extend(self, items):  # type: ignore[override]
+        batch = list(items)
+        super().extend(batch)
+        for item in batch:
+            _notify(item)
+
+
+def _live_list() -> list[TraceEvent]:
+    """A per-agent event buffer that streams its contents as they arrive."""
+    return _LiveEventList()
+
+
+@contextlib.contextmanager
+def live_event_sink(sink: Callable[[TraceEvent], None]) -> Iterator[None]:
+    """Route trace events produced in this context to `sink`."""
+    token = _LIVE_SINK.set(sink)
+    try:
+        yield
+    finally:
+        _LIVE_SINK.reset(token)
+
+
 # ── Agent: Requester ───────────────────────────────────────────────────
 
 @neatlogs.span(kind="AGENT", name="agent_requester", role="requester", goal="Initiate a procurement request")
@@ -56,7 +112,7 @@ def agent_requester(
     Initiates a procurement request.
     Input: {vendor_id, item, quantity, amount, department, requester, metadata}
     """
-    events: list[TraceEvent] = []
+    events: list[TraceEvent] = _live_list()
 
     # Check for prompt/metadata instruction injection attempting bypass
     metadata = request.get("metadata", {})
@@ -97,7 +153,7 @@ def agent_vendor_lookup(
     In INSECURE mode: Blindly trusts tool output and forwards manipulated records.
     In DEFENDED mode: Runs AuthoritativeRegistryGuard and StrictEntityBindingGuard.
     """
-    events: list[TraceEvent] = []
+    events: list[TraceEvent] = _live_list()
     vendor_id = request.get("vendor_id", "")
 
     vendor_info, tool_events = call_tool(
@@ -169,7 +225,7 @@ def agent_approver(
       2. Budget must be sufficient (conflicting instruction bypass denied in defended mode)
       3. Amount > $10,000 requires executive VP approval (auto-reject in standard tier)
     """
-    events: list[TraceEvent] = []
+    events: list[TraceEvent] = _live_list()
     vendor_info = request.get("vendor_info", {})
     amount = request.get("amount", 0)
     department = request.get("department", "")
@@ -310,7 +366,7 @@ def agent_purchaser(
     In INSECURE mode: Blindly trusts approval claim from upstream context.
     In DEFENDED mode: Validates approval signature against ledger before executing.
     """
-    events: list[TraceEvent] = []
+    events: list[TraceEvent] = _live_list()
     approval = request.get("approval", {})
 
     if not approval.get("approved", False):
@@ -419,7 +475,7 @@ def agent_auditor(
       - which approval token (if any) was used
       - whether the vendor matches the authoritative catalog
     """
-    events: list[TraceEvent] = []
+    events: list[TraceEvent] = _live_list()
 
     vendor_id = request.get("vendor_id", "")
     amount = request.get("amount", 0)
@@ -473,43 +529,55 @@ def run_procurement_pipeline(
 ) -> tuple[dict[str, Any], list[TraceEvent]]:
     """
     Run the full 4-agent pipeline and collect all trace events.
+
+    Events are collected through the live sink as they are produced rather
+    than assembled from each stage's return value.  That matters when a
+    stage crashes: its earlier events were already emitted, so they survive
+    into the trace instead of being lost with the abandoned return value —
+    and that partial evidence is exactly what explains the failure.
     """
     all_events: list[TraceEvent] = []
+    outer_sink = _LIVE_SINK.get()
 
-    try:
-        # Stage 1: Requester
-        request, events = agent_requester(request, overrides=tool_overrides, defended=defended)
-        all_events.extend(events)
+    def collect(event: TraceEvent) -> None:
+        all_events.append(event)
+        if outer_sink is not None:
+            try:
+                outer_sink(event)
+            except Exception:
+                pass
 
-        # Stage 2: Vendor Lookup
-        request, events = agent_vendor_lookup(request, overrides=tool_overrides, defended=defended)
-        all_events.extend(events)
+    with live_event_sink(collect):
+        try:
+            # Stage 1: Requester
+            request, _ = agent_requester(request, overrides=tool_overrides, defended=defended)
 
-        # Stage 3: Approver
-        request, events = agent_approver(request, overrides=tool_overrides, defended=defended)
-        all_events.extend(events)
+            # Stage 2: Vendor Lookup
+            request, _ = agent_vendor_lookup(request, overrides=tool_overrides, defended=defended)
 
-        # Stage 4: Purchaser
-        request, events = agent_purchaser(request, overrides=tool_overrides, defended=defended)
-        all_events.extend(events)
+            # Stage 3: Approver
+            request, _ = agent_approver(request, overrides=tool_overrides, defended=defended)
 
-        # Stage 5: Auditor (post-execution review)
-        request, events = agent_auditor(request, overrides=tool_overrides, defended=defended)
-        all_events.extend(events)
-    except PipelineError:
-        raise
-    except Exception as exc:
-        # An agent crashed mid-run (e.g. it consumed a malformed tool
-        # payload). Record the error in the trace and surface it as a
-        # PipelineError carrying everything collected so far, so the run
-        # reports a failure instead of a bare 500.
-        all_events.append(TraceEvent(
-            kind=EventKind.ERROR,
-            action="pipeline_error",
-            output_data={"error": str(exc), "error_type": type(exc).__name__},
-            trusted=True,
-            metadata={"stage_crashed": True},
-        ))
-        raise PipelineError(f"{type(exc).__name__}: {exc}", all_events) from exc
+            # Stage 4: Purchaser
+            request, _ = agent_purchaser(request, overrides=tool_overrides, defended=defended)
+
+            # Stage 5: Auditor (post-execution review)
+            request, _ = agent_auditor(request, overrides=tool_overrides, defended=defended)
+        except PipelineError:
+            raise
+        except Exception as exc:
+            # An agent crashed mid-run (e.g. it consumed a malformed tool
+            # payload). Record the error in the trace and surface it as a
+            # PipelineError carrying everything collected so far, so the run
+            # reports a failure instead of a bare 500.
+            crash_event = TraceEvent(
+                kind=EventKind.ERROR,
+                action="pipeline_error",
+                output_data={"error": str(exc), "error_type": type(exc).__name__},
+                trusted=True,
+                metadata={"stage_crashed": True},
+            )
+            _notify(crash_event)  # routed into all_events by `collect`
+            raise PipelineError(f"{type(exc).__name__}: {exc}", all_events) from exc
 
     return request, all_events

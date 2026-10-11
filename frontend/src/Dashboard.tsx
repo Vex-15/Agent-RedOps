@@ -6,6 +6,8 @@ import {
   getRunDetail,
   runScenario,
   runAllScenarios,
+  streamScenarioRun,
+  streamAllRuns,
   getDashboardMetrics,
   type ScenarioItem,
   type RunItem,
@@ -13,28 +15,10 @@ import {
   type DashboardMetrics,
   type TraceEvent,
 } from './lib/api';
+import { Badge, StatusBadge } from './components/Badge';
+import { EMPTY_LIVE, PHASE_LABEL, applyStreamMsg, type LiveState } from './lib/liveState';
 
 // ── Small UI atoms ─────────────────────────────────────────────────────
-function Badge({ tone, children }: { tone: 'red' | 'green' | 'amber' | 'gray'; children: React.ReactNode }) {
-  const tones = {
-    red: 'bg-crimson-faint text-crimson border-crimson/25',
-    green: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    amber: 'bg-amber-50 text-amber-700 border-amber-200',
-    gray: 'bg-lab text-muted border-line',
-  } as const;
-  return (
-    <span className={`inline-block px-2 py-0.5 rounded text-[11px] font-mono font-medium border ${tones[tone]}`}>
-      {children}
-    </span>
-  );
-}
-
-function StatusBadge({ status }: { status: string }) {
-  const s = (status || '').toLowerCase();
-  if (s === 'failed') return <Badge tone="red">failed</Badge>;
-  if (s === 'completed') return <Badge tone="green">completed</Badge>;
-  return <Badge tone="gray">{status || 'unknown'}</Badge>;
-}
 
 function MetricCard({ label, value, note, tone = 'ink' }: { label: string; value: string | number; note: string; tone?: 'ink' | 'red' | 'green' | 'amber' }) {
   const toneClass = { ink: 'text-ink', red: 'text-crimson', green: 'text-emerald-600', amber: 'text-amber-600' }[tone];
@@ -118,6 +102,150 @@ function buildMarkdownReport(detail: RunDetail): string {
   return lines.join('\n');
 }
 
+
+/**
+ * Renders a run as it executes: a phase ticker over a trace that grows
+ * event by event.  Defended re-run events are tagged so the audience can
+ * see the guards intercept the attack on the second pass.
+ */
+function LiveExecutionPanel({ state, onCancel }: { state: LiveState; onCancel: () => void }) {
+  const done = state.phase === 'done';
+  const blocked = state.defenses.filter((d) => d.verdict === 'blocked').length;
+
+  return (
+    <section className="panel panel-shadow p-5 lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto border-crimson/30">
+      <div className="flex items-center justify-between mb-3 gap-2">
+        <div className="flex items-center gap-2">
+          <span className="relative flex h-2.5 w-2.5">
+            {!done && (
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-crimson opacity-70" />
+            )}
+            <span
+              className={`relative inline-flex rounded-full h-2.5 w-2.5 ${
+                done ? 'bg-emerald-500' : state.errored ? 'bg-amber-500' : 'bg-crimson'
+              }`}
+            />
+          </span>
+          <h2 className="text-sm font-semibold uppercase tracking-wider">
+            {done ? 'Run Complete' : 'Live Execution'}
+          </h2>
+          {state.total != null && state.total > 0 && (
+            <span className="font-mono text-[11px] text-muted">
+              {(state.index ?? 0) + 1}/{state.total}
+            </span>
+          )}
+        </div>
+        <button
+          onClick={onCancel}
+          className="text-[11px] font-mono border border-line px-2 py-1 rounded hover:bg-lab transition-colors"
+        >
+          {done ? 'Close' : 'Stop'}
+        </button>
+      </div>
+
+      <div className="bg-lab border border-line rounded-lg p-3.5 text-xs mb-3">
+        <div className="font-medium text-sm">{state.scenarioName || '…'}</div>
+        <div className="mt-1.5 flex flex-wrap items-center gap-2 text-muted">
+          <Badge tone={done ? 'green' : state.errored ? 'amber' : 'red'}>
+            {PHASE_LABEL[state.phase] ?? state.phase}
+          </Badge>
+          <span>{state.message}</span>
+        </div>
+        <div className="mt-2.5 flex gap-4">
+          <span>
+            Events <b className="tabular-nums">{state.events.length}</b>
+          </span>
+          <span>
+            Findings <b className="text-crimson tabular-nums">{state.findings.length}</b>
+          </span>
+          <span>
+            Guards blocked <b className="text-emerald-700 tabular-nums">{blocked}</b>
+          </span>
+        </div>
+      </div>
+
+      <div className="border border-line rounded-lg overflow-hidden bg-lab/40">
+        <div className="px-3 py-1.5 bg-panel border-b border-line flex items-center justify-between">
+          <span className="text-[10px] font-semibold uppercase tracking-wider">Execution trace</span>
+          <span className="font-mono text-[9px] text-muted">
+            {done ? 'final' : 'receiving events…'}
+          </span>
+        </div>
+        <div className="divide-y divide-line max-h-[330px] overflow-y-auto">
+          {state.events.length === 0 && (
+            <div className="px-3 py-5 text-center text-xs text-muted">Waiting for the first event…</div>
+          )}
+          {state.events.map(({ event: ev, phase: evPhase }, i) => {
+            const isError = ev.kind === 'error';
+            const isGuard = Boolean(ev.metadata?.defense_triggered);
+            const untrusted = !ev.trusted && !isGuard;
+            return (
+              <div
+                key={`${ev.id}-${i}`}
+                className={`flex gap-2.5 px-3 py-1.5 ${isError || untrusted ? 'bg-crimson-faint/50' : ''}`}
+              >
+                <span
+                  className={`mt-1.5 w-[7px] h-[7px] shrink-0 rounded-full ${
+                    isError || untrusted ? 'bg-crimson' : isGuard ? 'bg-emerald-500' : 'bg-emerald-500/60'
+                  }`}
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span
+                      className={`text-[11px] font-medium ${
+                        isError || untrusted ? 'text-crimson' : isGuard ? 'text-emerald-700' : 'text-ink'
+                      }`}
+                    >
+                      {ev.action}
+                    </span>
+                    {evPhase === 'defend' && <Badge tone="green">defended</Badge>}
+                    {untrusted && <Badge tone="red">untrusted</Badge>}
+                    {isError && <Badge tone="red">error</Badge>}
+                    {isGuard && <Badge tone="green">guard</Badge>}
+                  </div>
+                  <div className="text-[9px] text-muted font-mono">
+                    {ev.agent} · {ev.kind}
+                  </div>
+                </div>
+                <span className="font-mono text-[9px] text-muted pt-0.5 shrink-0">
+                  {ev.timestamp.slice(11, 19)}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {state.findings.length > 0 && (
+        <div className="mt-3 border border-crimson/20 bg-crimson-faint/40 rounded-lg p-3">
+          <div className="text-[10px] font-semibold text-crimson uppercase tracking-wider mb-1.5">
+            Findings so far ({state.findings.length})
+          </div>
+          <ul className="space-y-1">
+            {state.findings.map((v) => (
+              <li key={v.id} className="text-[12px] flex items-center gap-2">
+                <Badge tone={v.severity === 'critical' || v.severity === 'high' ? 'red' : 'amber'}>
+                  {v.severity}
+                </Badge>
+                <span className="text-ink">{v.title}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {done && state.runIds.length > 0 && (
+        <p className="text-[11px] text-muted mt-3">
+          Run persisted · full trace, root cause and code-level fixes are in the inspector below.
+        </p>
+      )}
+      {state.errored && (
+        <p className="text-[11px] text-amber-700 mt-3">The stream reported an error — showing what was received.</p>
+      )}
+    </section>
+  );
+}
+
 // ── Console ────────────────────────────────────────────────────────────
 
 export default function Dashboard() {
@@ -132,6 +260,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [openEventId, setOpenEventId] = useState<string | null>(null);
   const [selectedViolationId, setSelectedViolationId] = useState<string | null>(null);
+  const [liveRun, setLiveRun] = useState<LiveState | null>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -156,8 +285,32 @@ export default function Dashboard() {
     setSelectedViolationId(res.data.violations[0]?.id ?? null);
   };
 
+  /**
+   * Run one scenario.  Against a live backend we stream it so the attack
+   * unfolds in the inspector; if streaming is unavailable we fall back to
+   * the blocking call, and in demo mode to the local simulation.
+   */
   const execute = async (scenarioId: number) => {
     setBusyId(scenarioId);
+    const scenario = scenarios.find((s) => s.id === scenarioId);
+
+    if (live) {
+      setLiveRun({ ...EMPTY_LIVE, scenarioName: scenario?.name ?? '', message: 'Starting execution…' });
+      const res = await streamScenarioRun(scenarioId, (msg) => {
+        setLiveRun((prev) => applyStreamMsg(prev ?? EMPTY_LIVE, msg));
+      });
+
+      if (res.ok && res.runIds.length > 0) {
+        await loadDetail(res.runIds[0]);
+        await refresh();
+        setLiveRun(null);
+        setBusyId(null);
+        return;
+      }
+      // Streaming unavailable — fall through to the blocking call.
+      setLiveRun(null);
+    }
+
     const res = await runScenario(scenarioId);
     if (res && typeof res.run_id === 'string') await loadDetail(res.run_id);
     await refresh();
@@ -166,10 +319,28 @@ export default function Dashboard() {
 
   const executeAll = async () => {
     setAllBusy(true);
+
+    if (live) {
+      setLiveRun({ ...EMPTY_LIVE, message: 'Starting batch…' });
+      const res = await streamAllRuns((msg) => {
+        setLiveRun((prev) => applyStreamMsg(prev ?? EMPTY_LIVE, msg));
+      });
+      if (res.ok && res.runIds.length > 0) {
+        await loadDetail(res.runIds[res.runIds.length - 1]);
+        await refresh();
+        setLiveRun(null);
+        setAllBusy(false);
+        return;
+      }
+      setLiveRun(null);
+    }
+
     await runAllScenarios();
     await refresh();
     setAllBusy(false);
   };
+
+  const cancelLive = () => setLiveRun(null);
 
   const selectedRun = runs.find((r) => r.run_id === selectedRunId) ?? null;
   const isBusy = busyId !== null;
@@ -399,6 +570,9 @@ export default function Dashboard() {
 
           {/* Right column: inspector */}
           <div className="lg:col-span-2">
+            {liveRun ? (
+              <LiveExecutionPanel state={liveRun} onCancel={cancelLive} />
+            ) : (
             <section className="panel panel-shadow p-5 lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto">
               <div className="flex items-center justify-between mb-4 gap-2">
                 <h2 className="text-sm font-semibold">Attack Path &amp; Defense Trace</h2>
@@ -652,6 +826,7 @@ export default function Dashboard() {
                 </div>
               )}
             </section>
+            )}
           </div>
         </div>
       </div>

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Logo from './components/Logo';
-import { HeroShield, LayerPanels } from './components/Illustrations';
+import { HeroShield } from './components/Illustrations';
+import { Reveal, Tilt, LayerStack } from './components/Motion';
 
 // ── Icons (inline, line style) ─────────────────────────────────────────
 const CubeIcon = () => (
@@ -412,9 +413,24 @@ export default function Landing() {
             <Logo />
           </a>
           <nav className="hidden md:flex items-center gap-7 text-sm text-muted">
-            {['Product', 'Scenarios', 'Research', 'Docs', 'Pricing'].map((l) => (
-              <a key={l} href="#product" className="hover:text-ink transition-colors">
-                {l}
+            {[
+              { label: 'Product', href: '#product' },
+              { label: 'Scenarios', href: '#features' },
+              { label: 'Live', href: '#/live', accent: true },
+              { label: 'Docs', href: '#demo' },
+              { label: 'Pricing', href: '#product' },
+            ].map((l) => (
+              <a
+                key={l.label}
+                href={l.href}
+                className={`transition-colors ${
+                  l.accent ? 'text-crimson font-semibold hover:text-crimson-dark' : 'hover:text-ink'
+                }`}
+              >
+                {l.accent && (
+                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-crimson mr-1.5 align-middle ring-pulse relative" />
+                )}
+                {l.label}
               </a>
             ))}
           </nav>
@@ -427,6 +443,10 @@ export default function Landing() {
       <main>
         {/* ── Hero ── */}
         <section className="hero relative overflow-hidden">
+          <div className="absolute inset-0 grid-bg opacity-50 pointer-events-none" aria-hidden="true" />
+          <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
+            <div className="scanline" />
+          </div>
           <div className="max-w-7xl mx-auto px-6 grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">
             <div>
               <div className="eyebrow mb-5">AI Agent Security Testing</div>
@@ -444,6 +464,10 @@ export default function Landing() {
                 </a>
                 <a href="#demo" className="btn-secondary">
                   View Demo
+                </a>
+                <a href="#/live" className="btn-secondary sheen !border-crimson/40 !text-crimson">
+                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-crimson relative ring-pulse" />
+                  Watch it live
                 </a>
               </div>
               <div className="mt-12 flex flex-wrap gap-x-8 gap-y-4">
@@ -463,7 +487,9 @@ export default function Landing() {
             </div>
 
             <div className="relative">
-              <HeroShield className="mx-auto" />
+              <Tilt max={12} scale={1.03}>
+                <HeroShield className="mx-auto float-slow" />
+              </Tilt>
               <div className="absolute right-2 top-10 hidden xl:flex flex-col gap-1.5 font-mono text-[10px] tracking-[0.2em] text-ink/70">
                 <span>TEST</span>
                 <span>DETECT</span>
@@ -497,7 +523,7 @@ export default function Landing() {
             </a>
           </div>
           <div className="relative">
-            <LayerPanels className="mx-auto" />
+            <LayerStack className="mx-auto" />
             <div className="absolute right-0 top-1/2 -translate-y-1/2 hidden xl:flex flex-col gap-2 font-mono text-[10px] font-semibold tracking-wider text-ink">
               {['ANALYZE', 'FIND ROOT CAUSE', 'GET FIXES'].map((l) => (
                 <span key={l} className="flex items-center gap-2">
@@ -525,7 +551,7 @@ export default function Landing() {
             </p>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-6">
+          <Reveal stagger className="grid md:grid-cols-3 gap-6">
             {[
               {
                 num: '01',
@@ -546,7 +572,8 @@ export default function Landing() {
                 desc: 'Get clear analysis and code-level recommendations to fix vulnerabilities.',
               },
             ].map((c) => (
-              <div key={c.num} className="panel panel-shadow p-7 lg:p-8 flex flex-col hover:border-crimson/40 transition-colors group">
+              <Tilt key={c.num} max={8} scale={1.015}>
+                <div className="panel panel-shadow face-lift p-7 lg:p-8 flex flex-col hover:border-crimson/40 transition-colors group h-full">
                 <div className="flex items-center justify-between mb-10">
                   <span className="text-crimson">{c.icon}</span>
                   <span className="font-mono text-xs text-muted">{c.num}</span>
@@ -556,9 +583,10 @@ export default function Landing() {
                 <span className="mt-8 text-crimson self-end group-hover:translate-x-1 transition-transform">
                   <ArrowRight />
                 </span>
-              </div>
+                </div>
+              </Tilt>
             ))}
-          </div>
+          </Reveal>
         </section>
 
         {/* ── Section 03: Live demo console ── */}
@@ -570,10 +598,15 @@ export default function Landing() {
                 <span className="text-crimson">SEE</span> REDOPS IN ACTION
               </h2>
             </div>
-            <p className="text-muted leading-relaxed max-w-md lg:justify-self-end">
-              Replay a full security test: follow the agent's execution, watch violations surface, and see the
-              defenses neutralize every attack path.
-            </p>
+            <div className="lg:justify-self-end flex flex-col items-start lg:items-end gap-3">
+              <p className="text-muted leading-relaxed max-w-md">
+                Replay a full security test: follow the agent's execution, watch violations surface, and see the
+                defenses neutralize every attack path.
+              </p>
+              <a href="#/live" className="btn-secondary sheen !border-crimson/40 !text-crimson">
+                Open the live stream <ArrowRight />
+              </a>
+            </div>
           </div>
           <DemoConsole />
         </section>

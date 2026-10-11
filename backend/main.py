@@ -11,13 +11,14 @@ Endpoints:
 """
 
 from __future__ import annotations
-import sys, os, json, dataclasses
+import sys, os, json
 from datetime import datetime
 from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -25,8 +26,9 @@ import database
 import models
 import schemas
 from scenarios.builtin import BUILTIN_SCENARIOS
-from scenarios.runner import run_scenario
+from scenarios.runner import run_scenario, stream_scenario
 from core.types import PipelineResult
+from core.serialize import to_dict as _serialize_dataclass
 
 # ── Neatlogs ───────────────────────────────────────────────────────────
 # Load backend/.env (NEATLOGS_API_KEY) before init(); the key is never
@@ -132,31 +134,6 @@ def _seed_scenarios():
 
 
 # ── Helpers ────────────────────────────────────────────────────────────
-
-def _serialize_dataclass(obj):
-    """Recursively convert dataclass instances to dicts."""
-    if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
-        d = {}
-        for f in dataclasses.fields(obj):
-            val = getattr(obj, f.name)
-            d[f.name] = _serialize_dataclass(val)
-        # Serialize plain properties too (e.g. AttackPath.length).
-        for name in ('length',):
-            prop = getattr(type(obj), name, None)
-            if isinstance(prop, property):
-                try:
-                    d[name] = getattr(obj, name)
-                except Exception:
-                    pass
-        return d
-    elif isinstance(obj, list):
-        return [_serialize_dataclass(i) for i in obj]
-    elif isinstance(obj, dict):
-        return {k: _serialize_dataclass(v) for k, v in obj.items()}
-    elif hasattr(obj, 'value'):  # Enum
-        return obj.value
-    return obj
-
 
 def _save_run(db: Session, result: PipelineResult) -> models.RunRecord:
     """Persist a PipelineResult to the database."""
@@ -346,6 +323,119 @@ def execute_all_scenarios(db: Session = Depends(get_db)):
         })
 
     return {"runs": results, "total": len(results)}
+
+
+# ── Live streaming ────────────────────────────────────────────────────
+#
+# A run normally returns only when it finishes.  These endpoints stream it
+# instead: newline-delimited JSON, one message per trace event as the
+# pipeline produces it, so the console can watch the attack unfold.  The
+# run is persisted at the end exactly like a blocking execute, and the
+# final result message is a compact summary (the client fetches full
+# detail over GET /api/runs/{run_id}).
+
+_MAX_DELAY_MS = 500
+
+
+def _scenario_dict(rec: models.ScenarioRecord) -> dict:
+    return {
+        "name": rec.name,
+        "description": rec.description,
+        "request": rec.request_data,
+        "tool_overrides": rec.tool_overrides or {},
+        "pre_inject": rec.pre_inject,
+        "expected_violations": rec.expected_violations or [],
+        "expected_outcome": rec.expected_outcome,
+    }
+
+
+def _defense_verdict(defenses: list) -> str | None:
+    verdicts = [d.verdict.value for d in defenses]
+    if not verdicts:
+        return None
+    if all(v == "blocked" for v in verdicts):
+        return "all_blocked"
+    if any(v == "bypassed" for v in verdicts):
+        return "some_bypassed"
+    return verdicts[0]
+
+
+def _result_summary(result: PipelineResult) -> dict:
+    return {
+        "type": "result",
+        "run_id": result.run_id,
+        "scenario_name": result.scenario_name,
+        "status": result.status.value,
+        "error": result.error or "",
+        "latency_ms": result.latency_ms,
+        "violation_count": len(result.violations),
+        "attack_path_count": len(result.attack_paths),
+        "defense_verdict": _defense_verdict(result.defenses),
+    }
+
+
+def _stream(scenarios: list[dict], delay_ms: int, batch: bool):
+    """Yield NDJSON lines, persisting each run as it completes."""
+    total = len(scenarios)
+    for index, scenario in enumerate(scenarios):
+        if batch:
+            yield json.dumps({
+                "type": "scenario",
+                "index": index,
+                "total": total,
+                "name": scenario["name"],
+            }) + "\n"
+
+        for msg in stream_scenario(scenario, delay_ms=delay_ms):
+            if msg["type"] == "result":
+                result = msg["result"]
+                # Persist before announcing, so the client can fetch the
+                # detail the moment it sees the result.
+                db = database.SessionLocal()
+                try:
+                    _save_run(db, result)
+                finally:
+                    db.close()
+                yield json.dumps(_result_summary(result)) + "\n"
+            else:
+                yield json.dumps(msg, default=str) + "\n"
+
+
+@app.post("/api/runs/stream/{scenario_id}")
+def stream_scenario_run(scenario_id: int, delay_ms: int = 60):
+    """Stream a single scenario execution as newline-delimited JSON."""
+    db = database.SessionLocal()
+    try:
+        rec = db.query(models.ScenarioRecord).filter(
+            models.ScenarioRecord.id == scenario_id
+        ).first()
+    finally:
+        db.close()
+    if not rec:
+        raise HTTPException(404, "Scenario not found")
+
+    return StreamingResponse(
+        _stream([_scenario_dict(rec)], max(0, min(delay_ms, _MAX_DELAY_MS)), batch=False),
+        media_type="application/x-ndjson",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@app.post("/api/runs/stream-all")
+def stream_all_scenarios(delay_ms: int = 15):
+    """Stream every scenario in sequence, tagging each with a marker."""
+    db = database.SessionLocal()
+    try:
+        recs = db.query(models.ScenarioRecord).all()
+        scenarios = [_scenario_dict(r) for r in recs]
+    finally:
+        db.close()
+
+    return StreamingResponse(
+        _stream(scenarios, max(0, min(delay_ms, _MAX_DELAY_MS)), batch=True),
+        media_type="application/x-ndjson",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @app.get("/api/dashboard", response_model=schemas.DashboardMetrics)

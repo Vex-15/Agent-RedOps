@@ -311,3 +311,113 @@ export async function getDashboardMetrics(): Promise<{ data: DashboardMetrics; l
   if (data) return { data, live: true };
   return { data: (await demo()).metrics, live: false };
 }
+
+// ── Live execution stream ───────────────────────────────────────────
+//
+// The backend streams a run as newline-delimited JSON: one message per
+// trace event as the pipeline produces it, plus phase/finding/defense/
+// result markers.  We read the fetch body incrementally so the console
+// renders the attack while it happens rather than after it finishes.
+
+export interface StreamMessage {
+  type: 'phase' | 'event' | 'finding' | 'defense' | 'scenario' | 'result' | 'error';
+  /** phase tag for `event` messages, and the phase name for `phase` messages */
+  phase?: string;
+  message?: string;
+  event?: TraceEvent;
+  violation?: Violation;
+  defense?: DefenseResult;
+  /** `scenario` marker fields */
+  index?: number;
+  total?: number;
+  name?: string;
+  /** `result` summary fields */
+  run_id?: string;
+  scenario_name?: string;
+  status?: string;
+  error?: string;
+  latency_ms?: number;
+  violation_count?: number;
+  attack_path_count?: number;
+  defense_verdict?: string | null;
+}
+
+interface StreamOutcome {
+  runIds: string[];
+  /** false when the API could not be streamed (offline / demo mode) */
+  ok: boolean;
+}
+
+async function readStream(
+  path: string,
+  onMessage: (msg: StreamMessage) => void,
+  signal?: AbortSignal,
+): Promise<StreamOutcome> {
+  let res: Response;
+  try {
+    res = await fetch(`${BASE}${path}`, { method: 'POST', signal });
+  } catch {
+    return { runIds: [], ok: false };
+  }
+  if (!res.ok || !res.body) return { runIds: [], ok: false };
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  const runIds: string[] = [];
+  let buffer = '';
+
+  const handle = (line: string) => {
+    if (!line) return;
+    let msg: StreamMessage;
+    try {
+      msg = JSON.parse(line) as StreamMessage;
+    } catch {
+      return;
+    }
+    if (msg.type === 'result' && msg.run_id) runIds.push(msg.run_id);
+    onMessage(msg);
+  };
+
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let newline: number;
+      while ((newline = buffer.indexOf('\n')) >= 0) {
+        handle(buffer.slice(0, newline).trim());
+        buffer = buffer.slice(newline + 1);
+      }
+    }
+  } catch {
+    // Aborted by the caller, or the connection dropped mid-stream.
+    // Return whatever we managed to receive — `ok` still marks that the
+    // API answered, so callers don't fall back to demo data.
+  }
+  handle(buffer.trim());
+
+  return { runIds, ok: true };
+}
+
+/**
+ * Stream one scenario's execution.  Returns the run id so the caller can
+ * load full detail, or null when the backend is unreachable so the UI can
+ * fall back to the simulated demo run.
+ */
+export async function streamScenarioRun(
+  scenarioId: number,
+  onMessage: (msg: StreamMessage) => void,
+  delayMs = 60,
+  signal?: AbortSignal,
+): Promise<StreamOutcome> {
+  return readStream(`/runs/stream/${scenarioId}?delay_ms=${delayMs}`, onMessage, signal);
+}
+
+/** Stream every scenario in sequence, tagged with a `scenario` marker. */
+export async function streamAllRuns(
+  onMessage: (msg: StreamMessage) => void,
+  delayMs = 15,
+  signal?: AbortSignal,
+): Promise<StreamOutcome> {
+  return readStream(`/runs/stream-all?delay_ms=${delayMs}`, onMessage, signal);
+}

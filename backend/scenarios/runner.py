@@ -8,6 +8,9 @@ defense verification.
 
 from __future__ import annotations
 import copy
+import contextlib
+import queue
+import threading
 import time
 from datetime import datetime
 
@@ -19,7 +22,8 @@ from core.types import (
     AttackPath, Defense, DefenseResult, DefenseVerdict,
     ViolationCategory, Severity, EventKind,
 )
-from agents.pipeline import run_procurement_pipeline, PipelineError
+from core.serialize import to_dict as _serialize
+from agents.pipeline import run_procurement_pipeline, PipelineError, live_event_sink
 from agents.tools import APPROVAL_LEDGER
 from analyzer.trace_analyzer import analyze_trace, build_attack_paths
 from analyzer.remediation import recommend_defenses
@@ -91,6 +95,131 @@ def _link_findings(result: PipelineResult) -> None:
         )
 
 
+def _execute_iter(scenario: dict, on_event=None):
+    """
+    Execute one scenario, yielding progress messages as it goes.
+
+    This is the single source of truth for a run: both the blocking
+    `run_scenario` and the live `stream_scenario` drive it, so a streamed
+    run is guaranteed to be identical to a stored one.
+
+    Yielded messages:
+      {"type": "phase",   "phase": ..., "message": ...}
+      {"type": "finding", "violation": {...}}
+      {"type": "defense", "defense":   {...}}
+      {"type": "result",  "result":    PipelineResult}
+
+    Trace events are *not* yielded here.  They are pushed to `on_event` as
+    the pipeline produces them, so a consumer sees them interleaved with
+    these messages in the order they actually happened.
+    """
+    result = PipelineResult(
+        scenario_name=scenario["name"],
+        status=RunStatus.RUNNING,
+        started_at=datetime.utcnow().isoformat(),
+    )
+
+    request = copy.deepcopy(scenario["request"])
+    overrides = scenario.get("tool_overrides", {})
+    pre_inject = scenario.get("pre_inject")
+
+    t0 = time.perf_counter()
+
+    def sink():
+        # A fresh context manager per entry — `@contextmanager` objects are
+        # single-use, and this generator enters the sink twice.
+        return (
+            live_event_sink(on_event)
+            if on_event is not None
+            else contextlib.nullcontext()
+        )
+
+    with sink():
+        yield {
+            "type": "phase",
+            "phase": "insecure",
+            "message": "Running the insecure pipeline…",
+        }
+
+        try:
+            # ── Phase 1: Run INSECURE pipeline ─────────────────────
+            # Clear the approval ledger before each run
+            APPROVAL_LEDGER.clear()
+
+            if pre_inject:
+                # Some scenarios inject state (like a forged approval)
+                # between agents.  We handle this by running the pipeline
+                # in stages.
+                final_request, trace = _run_with_injection(
+                    request, overrides, pre_inject,
+                )
+            else:
+                final_request, trace = run_procurement_pipeline(
+                    request, tool_overrides=overrides, defended=False,
+                )
+
+            result.trace = trace
+
+            # ── Phase 2: Analyze trace ─────────────────────────────
+            yield {
+                "type": "phase",
+                "phase": "analyze",
+                "message": "Analyzing trace for policy violations…",
+            }
+            result.violations = analyze_trace(trace, scenario, final_request)
+
+            # ── Phase 3: Build attack paths ────────────────────────
+            result.attack_paths = build_attack_paths(trace, result.violations)
+
+        except PipelineError as exc:
+            # A crashed execution is itself a finding: keep the partial
+            # trace and let the defended re-run act as the recovery check.
+            result.trace = exc.trace
+            result.status = RunStatus.FAILED
+            result.error = str(exc)
+            result.violations = [_crash_finding(exc, exc.trace)]
+            result.attack_paths = build_attack_paths(result.trace, result.violations)
+        except Exception as exc:  # pragma: no cover - defensive last resort
+            result.status = RunStatus.FAILED
+            result.error = f"{type(exc).__name__}: {exc}"
+            result.violations = [_crash_finding(exc, result.trace)]
+            result.attack_paths = build_attack_paths(result.trace, result.violations)
+
+    for v in result.violations:
+        yield {"type": "finding", "violation": _serialize(v)}
+
+    # ── Phase 4: Recommend defenses (also for failed executions) ──
+    defenses = recommend_defenses(result.violations)
+
+    yield {
+        "type": "phase",
+        "phase": "defend",
+        "message": "Re-running with defenses enabled to verify each guard…",
+    }
+
+    with sink():
+        # ── Phase 5: Verify defenses ──────────────────────────────
+        # The defended re-run doubles as the recovery check: a payload
+        # that crashed the insecure pipeline must be rejected at the
+        # boundary.
+        result.defenses = [
+            _verify_defense(scenario, defense, result.trace, result.violations)
+            for defense in defenses
+        ]
+
+    for d in result.defenses:
+        yield {"type": "defense", "defense": _serialize(d)}
+
+    elapsed = time.perf_counter() - t0
+    result.latency_ms = int(elapsed * 1000)
+    result.finished_at = datetime.utcnow().isoformat()
+    if result.status != RunStatus.FAILED:
+        result.status = RunStatus.COMPLETED
+    _link_findings(result)
+
+    yield {"type": "result", "result": result}
+
+
 @neatlogs.span(kind="WORKFLOW", name="evaluate_scenario", capture_output=False)
 def run_scenario(scenario: dict) -> PipelineResult:
     """
@@ -106,76 +235,51 @@ def run_scenario(scenario: dict) -> PipelineResult:
     insecure pipeline is captured (status=FAILED + error) and recorded as
     a finding, and the defended re-run doubles as the recovery check.
     """
-    result = PipelineResult(
-        scenario_name=scenario["name"],
-        status=RunStatus.RUNNING,
-        started_at=datetime.utcnow().isoformat(),
-    )
+    for msg in _execute_iter(scenario):
+        if msg["type"] == "result":
+            return msg["result"]
+    raise RuntimeError("scenario execution produced no result")  # pragma: no cover
 
-    request = copy.deepcopy(scenario["request"])
-    overrides = scenario.get("tool_overrides", {})
-    pre_inject = scenario.get("pre_inject")
 
-    t0 = time.perf_counter()
+@neatlogs.span(kind="WORKFLOW", name="stream_scenario_eval", capture_output=False)
+def stream_scenario(scenario: dict, delay_ms: int = 0):
+    """
+    Execute a scenario and yield progress messages in real time.
 
-    try:
-        # ── Phase 1: Run INSECURE pipeline ─────────────────────────
-        # Clear the approval ledger before each run
-        APPROVAL_LEDGER.clear()
+    Trace events are pushed from the executing pipeline on a worker thread,
+    so a consumer watches the attack unfold event-by-event instead of only
+    seeing the finished result.  `delay_ms` paces the event stream so the
+    replay is watchable; it delays the *delivery*, never the execution.
 
-        if pre_inject:
-            # Some scenarios inject state (like a forged approval)
-            # between agents.  We handle this by running the pipeline
-            # in stages.
-            final_request, trace = _run_with_injection(
-                request, overrides, pre_inject,
-            )
-        else:
-            final_request, trace = run_procurement_pipeline(
-                request, tool_overrides=overrides, defended=False,
-            )
+    Yields the same message shapes as `_execute_iter`, plus
+    {"type": "event", "phase": ..., "event": {...}} for trace events.
+    """
+    q: queue.Queue = queue.Queue()
+    phase = {"name": "insecure"}
 
-        result.trace = trace
+    def on_event(event: TraceEvent) -> None:
+        q.put({"type": "event", "phase": phase["name"], "event": _serialize(event)})
 
-        # ── Phase 2: Analyze trace ─────────────────────────────────
-        result.violations = analyze_trace(trace, scenario, final_request)
+    def worker() -> None:
+        try:
+            for msg in _execute_iter(scenario, on_event=on_event):
+                if msg["type"] == "phase":
+                    phase["name"] = msg["phase"]
+                q.put(msg)
+        except Exception as exc:  # pragma: no cover - defensive
+            q.put({"type": "error", "message": f"{type(exc).__name__}: {exc}"})
+        finally:
+            q.put(None)
 
-        # ── Phase 3: Build attack paths ────────────────────────────
-        result.attack_paths = build_attack_paths(trace, result.violations)
+    threading.Thread(target=worker, daemon=True).start()
 
-    except PipelineError as exc:
-        # A crashed execution is itself a finding: keep the partial trace
-        # and let the defended re-run below act as the recovery check.
-        result.trace = exc.trace
-        result.status = RunStatus.FAILED
-        result.error = str(exc)
-        result.violations = [_crash_finding(exc, exc.trace)]
-        result.attack_paths = build_attack_paths(result.trace, result.violations)
-    except Exception as exc:  # pragma: no cover - defensive last resort
-        result.status = RunStatus.FAILED
-        result.error = f"{type(exc).__name__}: {exc}"
-        result.violations = [_crash_finding(exc, result.trace)]
-        result.attack_paths = build_attack_paths(result.trace, result.violations)
-
-    # ── Phase 4: Recommend defenses (also for failed executions) ──
-    defenses = recommend_defenses(result.violations)
-
-    # ── Phase 5: Verify defenses ────────────────────────────────
-    # The defended re-run doubles as the recovery check: a payload that
-    # crashed the insecure pipeline must be rejected at the boundary.
-    result.defenses = [
-        _verify_defense(scenario, defense, result.trace, result.violations)
-        for defense in defenses
-    ]
-
-    elapsed = time.perf_counter() - t0
-    result.latency_ms = int(elapsed * 1000)
-    result.finished_at = datetime.utcnow().isoformat()
-    if result.status != RunStatus.FAILED:
-        result.status = RunStatus.COMPLETED
-    _link_findings(result)
-
-    return result
+    while True:
+        msg = q.get()
+        if msg is None:
+            break
+        yield msg
+        if delay_ms > 0 and msg["type"] == "event":
+            time.sleep(delay_ms / 1000.0)
 
 
 def _crash_finding(exc: Exception, trace: list[TraceEvent]) -> PolicyViolation:
@@ -225,7 +329,8 @@ def _run_with_injection(
     request.update(pre_inject)
 
     # Record the injection as a trace event
-    all_events.append(TraceEvent(
+    from agents.pipeline import _notify
+    inject_event = TraceEvent(
         agent=request.get("_inject_agent", "requester"),
         kind=EventKind.AGENT_DECISION,
         action="inject_state",
@@ -233,7 +338,9 @@ def _run_with_injection(
         output_data={"injected": True},
         trusted=False,
         metadata={"source": "scenario_pre_inject"},
-    ))
+    )
+    _notify(inject_event)
+    all_events.append(inject_event)
 
     # Stage 4: Purchaser runs with injected state
     request, events = agent_purchaser(request, overrides, defended=False)
