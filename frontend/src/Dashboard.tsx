@@ -332,14 +332,14 @@ export default function Dashboard() {
     <div className="min-h-screen bg-paper text-ink">
       {/* ── Top bar ── */}
       <header className="sticky top-0 z-30 bg-paper/85 backdrop-blur border-b border-line">
-        <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 min-h-14 flex items-center justify-between gap-3">
           <Logo />
-          <div className="flex items-center gap-3">
-            <span className="text-[11px] font-mono px-2 py-0.5 rounded border border-line bg-panel text-muted">
+          <div className="flex items-center justify-end gap-1.5 sm:gap-3 min-w-0">
+            <span className="hidden sm:inline text-[11px] font-mono px-2 py-0.5 rounded border border-line bg-panel text-muted whitespace-nowrap">
               v0.2.0-pipeline
             </span>
             <span
-              className={`text-[11px] font-mono px-2 py-0.5 rounded border ${
+              className={`text-[10px] sm:text-[11px] font-mono px-1.5 sm:px-2 py-0.5 rounded border whitespace-nowrap ${
                 live === null
                   ? 'border-line bg-panel text-muted'
                   : live
@@ -347,10 +347,12 @@ export default function Dashboard() {
                     : 'border-crimson/25 bg-crimson-faint text-crimson'
               }`}
             >
-              {live === null ? 'connecting…' : live ? 'backend live' : 'demo mode'}
+              <span className="sm:hidden">{live === null ? '…' : live ? 'live' : 'demo'}</span>
+              <span className="hidden sm:inline">{live === null ? 'connecting…' : live ? 'backend live' : 'demo mode'}</span>
             </span>
-            <a href="#/live" className="btn-primary !py-1.5 !px-4 text-[13px]">
-              Start in Live Stream →
+            <a href="#/live" className="btn-primary !py-1.5 !px-2.5 sm:!px-4 text-[12px] sm:text-[13px] whitespace-nowrap">
+              <span className="sm:hidden">Live →</span>
+              <span className="hidden sm:inline">Start in Live Stream →</span>
             </a>
           </div>
         </div>
