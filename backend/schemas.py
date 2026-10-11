@@ -110,3 +110,23 @@ class DashboardMetrics(BaseModel):
     scenarios_by_outcome: dict[str, int]
     violations_by_category: dict[str, int]
     violations_by_severity: dict[str, int]
+
+
+class RealAgentRequest(BaseModel):
+    name: str = "Real agent test"
+    url: str
+    method: str = "POST"
+    headers: dict[str, str] = {}
+    payload: Any = {}
+    timeout_seconds: float = 30
+
+
+class OpenAIRequest(BaseModel):
+    name: str = "OpenAI-compatible agent test"
+    base_url: str
+    api_key: str
+    model: str
+    prompt: str
+    system_prompt: str = ""
+    temperature: float = 0
+    timeout_seconds: float = 60

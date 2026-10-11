@@ -11,6 +11,61 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from scenarios.builtin import BUILTIN_SCENARIOS
 from scenarios.runner import run_scenario
 from core.types import RunStatus, DefenseVerdict, ViolationCategory, AgentRole, EventKind
+from real_agents import openai_payload, stream_http_agent
+
+
+class _FakeResponse:
+    status_code = 200
+    headers = {"content-type": "application/json"}
+    content = b'{"ok":true}'
+    is_success = True
+    text = '{"ok":true}'
+
+    def json(self):
+        return {"ok": True}
+
+
+class _FakeClient:
+    def __init__(self, **kwargs):
+        self.kwargs = kwargs
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        return None
+
+    def request(self, method, url, headers, json):
+        return _FakeResponse()
+
+
+def test_real_agent_requires_a_received_response(monkeypatch):
+    import real_agents
+
+    monkeypatch.setattr(real_agents.httpx, "Client", _FakeClient)
+    messages = list(stream_http_agent(
+        name="test",
+        url="https://example.test/agent",
+        method="POST",
+        headers={},
+        payload={"message": "hello"},
+        timeout_seconds=5,
+    ))
+    result = messages[-1]["result"]
+    assert result.status == RunStatus.COMPLETED
+    assert any(message["type"] == "event" and message["event"].action == "real_agent_response" for message in messages)
+    assert result.error == ""
+
+
+def test_openai_payload_is_chat_completions_compatible():
+    assert openai_payload("demo", "hello", "system", 0) == {
+        "model": "demo",
+        "messages": [
+            {"role": "system", "content": "system"},
+            {"role": "user", "content": "hello"},
+        ],
+        "temperature": 0,
+    }
 
 
 class TestDeceptiveVendor:

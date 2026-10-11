@@ -352,10 +352,16 @@ async function readStream(
   path: string,
   onMessage: (msg: StreamMessage) => void,
   signal?: AbortSignal,
+  body?: unknown,
 ): Promise<StreamOutcome> {
   let res: Response;
   try {
-    res = await fetch(`${BASE}${path}`, { method: 'POST', signal });
+    res = await fetch(`${BASE}${path}`, {
+      method: 'POST',
+      signal,
+      headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
   } catch {
     return { runIds: [], ok: false };
   }
@@ -420,4 +426,40 @@ export async function streamAllRuns(
   signal?: AbortSignal,
 ): Promise<StreamOutcome> {
   return readStream(`/runs/stream-all?delay_ms=${delayMs}`, onMessage, signal);
+}
+
+export interface RealWebhookConfig {
+  name: string;
+  url: string;
+  method: 'POST' | 'PUT' | 'PATCH';
+  headers: Record<string, string>;
+  payload: unknown;
+  timeout_seconds: number;
+}
+
+export interface RealOpenAIConfig {
+  name: string;
+  base_url: string;
+  api_key: string;
+  model: string;
+  prompt: string;
+  system_prompt: string;
+  temperature: number;
+  timeout_seconds: number;
+}
+
+export function streamRealWebhook(
+  config: RealWebhookConfig,
+  onMessage: (msg: StreamMessage) => void,
+  signal?: AbortSignal,
+): Promise<StreamOutcome> {
+  return readStream('/real-agents/webhook/stream', onMessage, signal, config);
+}
+
+export function streamRealOpenAI(
+  config: RealOpenAIConfig,
+  onMessage: (msg: StreamMessage) => void,
+  signal?: AbortSignal,
+): Promise<StreamOutcome> {
+  return readStream('/real-agents/openai/stream', onMessage, signal, config);
 }

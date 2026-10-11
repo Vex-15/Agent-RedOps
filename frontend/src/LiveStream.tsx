@@ -6,6 +6,10 @@ import {
   getScenarios,
   streamScenarioRun,
   streamAllRuns,
+  streamRealWebhook,
+  streamRealOpenAI,
+  type RealWebhookConfig,
+  type RealOpenAIConfig,
   type ScenarioItem,
   type StreamMessage,
 } from './lib/api';
@@ -187,6 +191,25 @@ export default function LiveStream() {
   const [running, setRunning] = useState(false);
   const [state, setState] = useState<LiveState>(EMPTY_LIVE);
   const [runIds, setRunIds] = useState<string[]>([]);
+  const [agentMode, setAgentMode] = useState<'demo' | 'webhook' | 'openai'>('demo');
+  const [webhook, setWebhook] = useState<RealWebhookConfig>({
+    name: 'My webhook agent',
+    url: '',
+    method: 'POST',
+    headers: {},
+    payload: { message: 'Run a security self-check and return your decision.' },
+    timeout_seconds: 30,
+  });
+  const [openai, setOpenai] = useState<RealOpenAIConfig>({
+    name: 'My OpenAI-compatible agent',
+    base_url: '',
+    api_key: '',
+    model: '',
+    prompt: 'Run a security self-check and explain your decision.',
+    system_prompt: '',
+    temperature: 0,
+    timeout_seconds: 60,
+  });
 
   const abortRef = useRef<AbortController | null>(null);
   const feedRef = useRef<HTMLDivElement>(null);
@@ -239,6 +262,27 @@ export default function LiveStream() {
         ? await streamScenarioRun(selected, onMessage, PACE[paceIdx].ms, controller.signal)
         : await streamAllRuns(onMessage, PACE[paceIdx].ms, controller.signal);
 
+    setRunning(false);
+    if (res.ok) setRunIds(res.runIds);
+  };
+
+  const startReal = async () => {
+    if (running) return;
+    const controller = new AbortController();
+    abortRef.current = controller;
+    setRunning(true);
+    setRunIds([]);
+    setState({
+      ...EMPTY_LIVE,
+      scenarioName: agentMode === 'webhook' ? webhook.name : openai.name,
+      message: 'Preparing a real request…',
+    });
+    const onMessage = (msg: StreamMessage) => {
+      if (!controller.signal.aborted) setState((prev) => applyStreamMsg(prev, msg));
+    };
+    const res = agentMode === 'webhook'
+      ? await streamRealWebhook(webhook, onMessage, controller.signal)
+      : await streamRealOpenAI(openai, onMessage, controller.signal);
     setRunning(false);
     if (res.ok) setRunIds(res.runIds);
   };
@@ -316,6 +360,50 @@ export default function LiveStream() {
             </button>
           </div>
         )}
+
+        <div className="panel panel-shadow p-5 mb-5">
+          <div className="flex flex-wrap items-center gap-2 mb-5">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted">Execution source</span>
+            {(['demo', 'webhook', 'openai'] as const).map((mode) => (
+              <button
+                key={mode}
+                onClick={() => setAgentMode(mode)}
+                disabled={running}
+                className={`px-3 py-1.5 rounded-lg border text-xs font-medium ${
+                  agentMode === mode ? 'border-crimson bg-crimson text-white' : 'border-line-strong text-muted hover:border-crimson hover:text-crimson'
+                }`}
+              >
+                {mode === 'demo' ? 'Deterministic demo' : mode === 'webhook' ? 'HTTP webhook' : 'OpenAI-compatible'}
+              </button>
+            ))}
+          </div>
+          {agentMode !== 'demo' && (
+            <div className="grid md:grid-cols-2 gap-4 mb-5">
+              {agentMode === 'webhook' ? (
+                <>
+                  <input value={webhook.name} onChange={(e) => setWebhook({ ...webhook, name: e.target.value })} placeholder="Agent name" className="field" />
+                  <input value={webhook.url} onChange={(e) => setWebhook({ ...webhook, url: e.target.value })} placeholder="https://agent.example/run" className="field" />
+                  <textarea value={JSON.stringify(webhook.payload, null, 2)} onChange={(e) => { try { setWebhook({ ...webhook, payload: JSON.parse(e.target.value) }); } catch { /* wait for valid JSON */ } }} className="field min-h-24 font-mono text-xs md:col-span-2" />
+                </>
+              ) : (
+                <>
+                  <input value={openai.base_url} onChange={(e) => setOpenai({ ...openai, base_url: e.target.value })} placeholder="https://api.example.com/v1" className="field" />
+                  <input value={openai.model} onChange={(e) => setOpenai({ ...openai, model: e.target.value })} placeholder="model name" className="field" />
+                  <input type="password" value={openai.api_key} onChange={(e) => setOpenai({ ...openai, api_key: e.target.value })} placeholder="API key (sent only to backend)" className="field" />
+                  <textarea value={openai.prompt} onChange={(e) => setOpenai({ ...openai, prompt: e.target.value })} placeholder="Prompt" className="field min-h-24" />
+                </>
+              )}
+            </div>
+          )}
+          {agentMode !== 'demo' && (
+            <div className="flex items-center justify-between gap-4 mb-5 text-xs text-muted">
+              <span>RedOps will show a tested result only after the configured endpoint returns a real response.</span>
+              <button onClick={() => void startReal()} disabled={!live || running} className="btn-primary sheen disabled:opacity-50">
+                ▶ Send real request
+              </button>
+            </div>
+          )}
+        </div>
 
         <div className="panel panel-shadow p-5">
           <div className="flex flex-wrap items-end gap-6">

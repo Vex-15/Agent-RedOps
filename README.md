@@ -181,3 +181,18 @@ config and the generated `repository-graph.ndjson` evidence artifact, not the
 
 Defensive research tooling. All purchases, vendors, and approvals in the simulation are
 fabricated — no real transactions occur.
+### Test a real agent
+
+Open `#/live` and choose **HTTP webhook** to send a real JSON request to any
+HTTP(S) endpoint that accepts `POST`, `PUT`, or `PATCH`. RedOps streams the
+request and response into the Trace Explorer and stores the run only after an
+HTTP response is received. A timeout, connection error, or non-2xx response is
+shown as a failed real request; it is never presented as a successful test.
+
+Choose **OpenAI-compatible** to call an endpoint exposing `/chat/completions`.
+Enter its base URL, API key, model, and prompt. API keys are sent to the
+backend only for the request and are not included in trace headers or
+persisted run data. Use HTTPS and a dedicated test agent in production.
+
+The deterministic scenario controls remain available as **Deterministic demo**
+mode and do not make external requests.

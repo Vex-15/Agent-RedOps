@@ -29,6 +29,7 @@ from scenarios.builtin import BUILTIN_SCENARIOS
 from scenarios.runner import run_scenario, stream_scenario
 from core.types import PipelineResult
 from core.serialize import to_dict as _serialize_dataclass
+from real_agents import stream_http_agent, openai_payload
 
 # ── Neatlogs ───────────────────────────────────────────────────────────
 # Load backend/.env (NEATLOGS_API_KEY) before init(); the key is never
@@ -439,6 +440,72 @@ def stream_all_scenarios(delay_ms: int = 15):
 
     return StreamingResponse(
         _stream(scenarios, max(0, min(delay_ms, _MAX_DELAY_MS)), batch=True),
+        media_type="application/x-ndjson",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+def _real_stream(messages):
+    for msg in messages:
+        if msg["type"] == "result":
+            result = msg["result"]
+            db = database.SessionLocal()
+            try:
+                _save_run(db, result)
+            finally:
+                db.close()
+            yield json.dumps(_result_summary(result)) + "\n"
+        elif msg["type"] == "event":
+            yield json.dumps(
+                {**msg, "event": _serialize_dataclass(msg["event"])},
+            ) + "\n"
+        else:
+            yield json.dumps(msg, default=str) + "\n"
+
+
+@app.post("/api/real-agents/webhook/stream")
+def stream_real_webhook(request: schemas.RealAgentRequest):
+    """Test a user-owned REST agent with one real request."""
+    if request.method.upper() not in {"POST", "PUT", "PATCH"}:
+        raise HTTPException(400, "Only POST, PUT, and PATCH are supported for JSON agent payloads")
+    if not request.url.startswith(("http://", "https://")):
+        raise HTTPException(400, "Agent URL must use http:// or https://")
+    if request.timeout_seconds <= 0 or request.timeout_seconds > 300:
+        raise HTTPException(400, "timeout_seconds must be between 0 and 300")
+    return StreamingResponse(
+        _real_stream(stream_http_agent(
+            name=request.name,
+            url=request.url,
+            method=request.method,
+            headers=request.headers,
+            payload=request.payload,
+            timeout_seconds=request.timeout_seconds,
+        )),
+        media_type="application/x-ndjson",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@app.post("/api/real-agents/openai/stream")
+def stream_openai_agent(request: schemas.OpenAIRequest):
+    """Test an OpenAI-compatible chat-completions endpoint with one real request."""
+    if not request.base_url.startswith(("http://", "https://")):
+        raise HTTPException(400, "base_url must use http:// or https://")
+    if not request.api_key:
+        raise HTTPException(400, "api_key is required to make a real request")
+    url = request.base_url.rstrip("/")
+    if not url.endswith("/chat/completions"):
+        url += "/chat/completions"
+    payload = openai_payload(request.model, request.prompt, request.system_prompt, request.temperature)
+    return StreamingResponse(
+        _real_stream(stream_http_agent(
+            name=request.name,
+            url=url,
+            method="POST",
+            headers={"Authorization": f"Bearer {request.api_key}", "Content-Type": "application/json"},
+            payload=payload,
+            timeout_seconds=request.timeout_seconds,
+        )),
         media_type="application/x-ndjson",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
