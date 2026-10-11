@@ -417,9 +417,9 @@ export default function Dashboard() {
             <section className="panel panel-shadow overflow-hidden">
               <div className="px-5 py-3.5 border-b border-line bg-lab/50 flex items-center justify-between">
                 <h2 className="text-sm font-semibold">Recent Execution Runs</h2>
-                <span className="font-mono text-[11px] text-muted">click a row to inspect</span>
+                <span className="font-mono text-[11px] text-muted">select a run to inspect</span>
               </div>
-              <div className="overflow-x-auto">
+              <div className="hidden xl:block overflow-hidden">
                 <table className="w-full text-left text-sm">
                   <thead className="text-[11px] uppercase tracking-wider text-muted border-b border-line">
                     <tr>
@@ -472,6 +472,45 @@ export default function Dashboard() {
                     ))}
                   </tbody>
                 </table>
+              </div>
+              <div className="xl:hidden divide-y divide-line">
+                {loading && visibleRuns.length === 0 && (
+                  <div className="px-5 py-8 text-center text-sm text-muted">Loading runs…</div>
+                )}
+                {!loading && visibleRuns.length === 0 && (
+                  <div className="px-5 py-8 text-center text-sm text-muted">
+                    No execution runs yet — start a test in Live Stream to see history here.
+                  </div>
+                )}
+                {visibleRuns.map((r) => (
+                  <button
+                    key={r.run_id}
+                    type="button"
+                    onClick={() => loadDetail(r.run_id)}
+                    className={`w-full text-left px-5 py-4 transition-colors ${
+                      selectedRunId === r.run_id ? 'bg-crimson-faint/60' : 'hover:bg-lab/60'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="font-medium text-sm break-words">{r.scenario_name}</div>
+                        <div className="font-mono text-[10px] text-crimson mt-1 break-all">{r.run_id}</div>
+                      </div>
+                      <StatusBadge status={r.status} />
+                    </div>
+                    <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-xs text-muted">
+                      <span>Source <span className="ml-1"><SourceBadge source={r.source} /></span></span>
+                      <span>Latency <b className="text-ink">{r.latency_ms} ms</b></span>
+                      <span>Violations <b className={r.violation_count > 0 ? 'text-crimson' : 'text-ink'}>{r.violation_count}</b></span>
+                      <span>Attack paths <b className={r.attack_path_count > 0 ? 'text-amber-600' : 'text-ink'}>{r.attack_path_count || 'None'}</b></span>
+                    </div>
+                    <div className="mt-3">
+                      <Badge tone={r.defense_verdict === 'all_blocked' ? 'green' : r.defense_verdict === 'some_bypassed' ? 'amber' : 'gray'}>
+                        {r.defense_verdict ?? 'clean'}
+                      </Badge>
+                    </div>
+                  </button>
+                ))}
               </div>
               {hasMoreRuns && (
                 <div className="px-5 py-3 border-t border-line bg-lab/40 flex items-center justify-between">
