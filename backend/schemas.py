@@ -24,6 +24,7 @@ class RunSummary(BaseModel):
     id: int
     run_id: str
     scenario_name: str
+    source: str = "demo"
     status: str
     violation_count: int
     attack_path_count: int
@@ -87,6 +88,7 @@ class RunDetail(BaseModel):
     id: int
     run_id: str
     scenario_name: str
+    source: str = "demo"
     status: str
     trace: list[TraceEventOut]
     violations: list[ViolationOut]

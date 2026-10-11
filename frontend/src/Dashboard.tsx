@@ -31,6 +31,15 @@ function MetricCard({ label, value, note, tone = 'ink' }: { label: string; value
   );
 }
 
+function SourceBadge({ source }: { source?: string }) {
+  const labels: Record<string, string> = {
+    demo: 'DEMO',
+    webhook: 'HTTP WEBHOOK',
+    openai: 'OPENAI COMPATIBLE',
+  };
+  return <Badge tone={source === 'demo' || !source ? 'gray' : 'green'}>{labels[source ?? 'demo'] ?? source}</Badge>;
+}
+
 // ── Report export ──────────────────────────────────────────────────────
 
 function download(filename: string, content: string, mime: string) {
@@ -534,6 +543,7 @@ export default function Dashboard() {
                     <tr>
                       <th className="px-5 py-2.5 font-mono">Run ID</th>
                       <th className="px-5 py-2.5">Scenario</th>
+                      <th className="px-5 py-2.5">Source</th>
                       <th className="px-5 py-2.5">Status</th>
                       <th className="px-5 py-2.5">Violations</th>
                       <th className="px-5 py-2.5">Attack Paths</th>
@@ -544,12 +554,12 @@ export default function Dashboard() {
                   <tbody className="divide-y divide-line">
                     {loading && visibleRuns.length === 0 && (
                       <tr>
-                        <td colSpan={7} className="px-5 py-8 text-center text-muted">Loading runs…</td>
+                        <td colSpan={8} className="px-5 py-8 text-center text-muted">Loading runs…</td>
                       </tr>
                     )}
                     {!loading && visibleRuns.length === 0 && (
                       <tr>
-                        <td colSpan={7} className="px-5 py-8 text-center text-muted">No execution runs yet — run a scenario to see history here.</td>
+                        <td colSpan={8} className="px-5 py-8 text-center text-muted">No execution runs yet — run a scenario to see history here.</td>
                       </tr>
                     )}
                     {visibleRuns.map((r) => (
@@ -562,6 +572,7 @@ export default function Dashboard() {
                       >
                         <td className="px-5 py-3 font-mono text-xs text-crimson">{r.run_id}</td>
                         <td className="px-5 py-3 font-medium text-[13px]">{r.scenario_name}</td>
+                        <td className="px-5 py-3"><SourceBadge source={r.source} /></td>
                         <td className="px-5 py-3"><StatusBadge status={r.status} /></td>
                         <td className="px-5 py-3 tabular-nums">
                           {r.violation_count > 0 ? <span className="text-crimson font-semibold">{r.violation_count}</span> : <span className="text-muted">0</span>}
@@ -642,6 +653,7 @@ export default function Dashboard() {
                       {(detail?.status ?? selectedRun?.status) && (
                         <StatusBadge status={detail?.status ?? selectedRun?.status ?? ''} />
                       )}
+                      <SourceBadge source={detail?.source ?? selectedRun?.source} />
                     </div>
                     <div className="text-muted mt-2 flex gap-4">
                       <span>

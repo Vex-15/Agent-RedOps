@@ -102,6 +102,8 @@ def _migrate_schema():
         cols = {row[1] for row in conn.execute(text("PRAGMA table_info(runs)"))}
         if "error" not in cols:
             conn.execute(text("ALTER TABLE runs ADD COLUMN error TEXT DEFAULT ''"))
+        if "source" not in cols:
+            conn.execute(text("ALTER TABLE runs ADD COLUMN source TEXT NOT NULL DEFAULT 'demo'"))
 
 
 # ── Seed built-in scenarios ───────────────────────────────────────────
@@ -136,13 +138,14 @@ def _seed_scenarios():
 
 # ── Helpers ────────────────────────────────────────────────────────────
 
-def _save_run(db: Session, result: PipelineResult) -> models.RunRecord:
+def _save_run(db: Session, result: PipelineResult, source: str = "demo") -> models.RunRecord:
     """Persist a PipelineResult to the database."""
     serialized = _serialize_dataclass(result)
 
     rec = models.RunRecord(
         run_id=result.run_id,
         scenario_name=result.scenario_name,
+        source=source,
         status=result.status.value if hasattr(result.status, 'value') else result.status,
         trace_json=serialized.get("trace", []),
         violations_json=serialized.get("violations", []),
@@ -200,6 +203,7 @@ def list_runs(
             id=r.id,
             run_id=r.run_id,
             scenario_name=r.scenario_name,
+            source=r.source or "demo",
             status=r.status,
             violation_count=len(violations),
             attack_path_count=len(attack_paths),
@@ -225,6 +229,7 @@ def get_run_detail(run_id: str, db: Session = Depends(get_db)):
         id=rec.id,
         run_id=rec.run_id,
         scenario_name=rec.scenario_name,
+        source=rec.source or "demo",
         status=rec.status,
         trace=[
             schemas.TraceEventOut(
@@ -445,13 +450,13 @@ def stream_all_scenarios(delay_ms: int = 15):
     )
 
 
-def _real_stream(messages):
+def _real_stream(messages, source: str):
     for msg in messages:
         if msg["type"] == "result":
             result = msg["result"]
             db = database.SessionLocal()
             try:
-                _save_run(db, result)
+                _save_run(db, result, source=source)
             finally:
                 db.close()
             yield json.dumps(_result_summary(result)) + "\n"
@@ -480,7 +485,7 @@ def stream_real_webhook(request: schemas.RealAgentRequest):
             headers=request.headers,
             payload=request.payload,
             timeout_seconds=request.timeout_seconds,
-        )),
+        ), source="webhook"),
         media_type="application/x-ndjson",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
@@ -505,7 +510,7 @@ def stream_openai_agent(request: schemas.OpenAIRequest):
             headers={"Authorization": f"Bearer {request.api_key}", "Content-Type": "application/json"},
             payload=payload,
             timeout_seconds=request.timeout_seconds,
-        )),
+        ), source="openai"),
         media_type="application/x-ndjson",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

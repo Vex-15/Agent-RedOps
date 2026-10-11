@@ -24,6 +24,7 @@ export interface RunItem {
   id: number;
   run_id: string;
   scenario_name: string;
+  source?: 'demo' | 'webhook' | 'openai' | string;
   status: string;
   error: string;
   violation_count: number;
@@ -85,6 +86,7 @@ export interface RunDetail {
   id: number;
   run_id: string;
   scenario_name: string;
+  source?: 'demo' | 'webhook' | 'openai' | string;
   status: string;
   error: string;
   trace: TraceEvent[];

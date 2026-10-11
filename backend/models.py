@@ -25,6 +25,7 @@ class RunRecord(Base):
     id = Column(Integer, primary_key=True, index=True)
     run_id = Column(String, unique=True, index=True, nullable=False)
     scenario_name = Column(String, index=True, nullable=False)
+    source = Column(String, default="demo", nullable=False)
     status = Column(String, default="pending")
 
     # Serialized trace, violations, attack paths, defenses
