@@ -16,6 +16,10 @@ import main  # noqa: F401  (app + lifespan seeding)
 
 OUT = sys.argv[1] if len(sys.argv) > 1 else "demo_data.json"
 
+# Dev-only harness: writes demo_data.json for the frontend fallback story.
+# Do NOT commit demo_data.json — it is regenerated locally and is not part
+# of the shipped repo. Put it under .gitignore, not in version control.
+
 
 def dashboard_metrics(runs, details, scenario_count):
     total_violations = 0

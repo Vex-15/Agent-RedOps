@@ -346,6 +346,16 @@ export default function Dashboard() {
   const isBusy = busyId !== null;
   const failedRuns = runs.filter((r) => (r.status || '').toLowerCase() === 'failed').length;
 
+  // Recent runs are paginated: up to PAGE_SIZE rows per page, most recent first.
+  const PAGE_SIZE = 10;
+  const [runsPage, setRunsPage] = useState(0);
+  const visibleRuns = useMemo(
+    () => runs.slice(0, (runsPage + 1) * PAGE_SIZE),
+    [runs, runsPage],
+  );
+  const hasMoreRuns = runs.length > (runsPage + 1) * PAGE_SIZE;
+  const loadOlderRuns = () => setRunsPage((p) => p + 1);
+
   const selectedViolation = useMemo(
     () => detail?.violations.find((v) => v.id === selectedViolationId) ?? null,
     [detail, selectedViolationId],
@@ -512,7 +522,7 @@ export default function Dashboard() {
               </div>
             </section>
 
-            {/* Runs table */}
+            {/* Runs table (paginated — latest first, PAGE_SIZE rows per page) */}
             <section className="panel panel-shadow overflow-hidden">
               <div className="px-5 py-3.5 border-b border-line bg-lab/50 flex items-center justify-between">
                 <h2 className="text-sm font-semibold">Recent Execution Runs</h2>
@@ -532,12 +542,17 @@ export default function Dashboard() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-line">
-                    {loading && runs.length === 0 && (
+                    {loading && visibleRuns.length === 0 && (
                       <tr>
                         <td colSpan={7} className="px-5 py-8 text-center text-muted">Loading runs…</td>
                       </tr>
                     )}
-                    {runs.map((r) => (
+                    {!loading && visibleRuns.length === 0 && (
+                      <tr>
+                        <td colSpan={7} className="px-5 py-8 text-center text-muted">No execution runs yet — run a scenario to see history here.</td>
+                      </tr>
+                    )}
+                    {visibleRuns.map((r) => (
                       <tr
                         key={r.run_id}
                         onClick={() => loadDetail(r.run_id)}
@@ -565,6 +580,25 @@ export default function Dashboard() {
                   </tbody>
                 </table>
               </div>
+              {hasMoreRuns && (
+                <div className="px-5 py-3 border-t border-line bg-lab/40 flex items-center justify-between">
+                  <span className="text-[11px] text-muted font-mono">
+                    Showing {(runsPage + 1) * PAGE_SIZE} of {runs.length} runs
+                  </span>
+                  <button
+                    onClick={loadOlderRuns}
+                    disabled={isBusy || allBusy}
+                    className="text-[11px] font-mono border border-line-strong bg-panel text-muted hover:text-ink hover:border-crimson px-3 py-1 rounded transition-colors disabled:opacity-50"
+                  >
+                    Load older runs ↓
+                  </button>
+                </div>
+              )}
+              {!hasMoreRuns && runs.length > 0 && runs.length > PAGE_SIZE && (
+                <div className="px-5 py-3 border-t border-line bg-lab/40 text-[11px] text-muted font-mono">
+                  All {runs.length} runs shown.
+                </div>
+              )}
             </section>
           </div>
 

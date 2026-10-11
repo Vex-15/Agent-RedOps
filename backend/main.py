@@ -166,10 +166,16 @@ def list_scenarios(db: Session = Depends(get_db)):
 
 
 @app.get("/api/runs", response_model=list[schemas.RunSummary])
-def list_runs(db: Session = Depends(get_db)):
+def list_runs(
+    db: Session = Depends(get_db),
+    limit: int = 100,
+    offset: int = 0,
+):
+    """Run history, most recent first. `limit`/`offset` power the console's
+    paginated Recent Execution Runs panel without dropping older runs from the DB."""
     records = db.query(models.RunRecord).order_by(
         models.RunRecord.id.desc()
-    ).limit(100).all()
+    ).offset(offset).limit(limit).all()
 
     summaries = []
     for r in records:

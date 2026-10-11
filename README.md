@@ -64,11 +64,20 @@ Agent-RedOps/
 cd backend
 python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
+```
+
+Edit `backend/.env` (gitignored) and set the real `NEATLOGS_API_KEY`. Start the API:
+
+```bash
 uvicorn main:app --reload --port 8000
 ```
 
 Health check: `curl http://127.0.0.1:8000/api/health` →
 `{"status":"ok","neatlogs":true,...}`.
+
+The shipped `run-dev.ps1` starts both halves in background jobs — `uvicorn main:app --reload --port 8000`
+and `npm run dev` — with the frontend on `127.0.0.1:5173` and the backend on `127.0.0.1:8000`.
+Press Ctrl+C to stop both. Do **not** commit `.env`.
 
 ### Frontend
 
@@ -78,9 +87,9 @@ npm install
 npm run dev        # http://127.0.0.1:5173
 ```
 
-The console talks to `http://127.0.0.1:8000/api` by default. When the backend is down
-the header chip flips to **demo mode** and the console serves captured data from a real
-earlier run — never silent mocks.
+The Vite proxy forwards `/api` to the backend on `127.0.0.1:8000`.
+When the backend is down the header chip flips to **demo mode** and the console serves
+captured data from a real earlier run — never silent mocks.
 
 ## API surface
 
@@ -88,10 +97,13 @@ earlier run — never silent mocks.
 |---|---|
 | `GET /api/health` | status + Neatlogs configuration |
 | `GET /api/scenarios` | the 11 built-in scenarios |
-| `POST /api/runs` / `POST /api/runs/{id}/run` | execute one/all scenarios |
+| `POST /api/runs/execute/{id}` | execute one scenario (blocking) |
+| `POST /api/runs/execute-all` | execute all scenarios (blocking) |
+| `POST /api/runs/stream/{id}` | stream a single scenario as NDJSON |
+| `POST /api/runs/stream-all` | stream all scenarios in sequence |
 | `GET /api/runs` | run history (summary rows) |
 | `GET /api/runs/{run_id}` | full detail: trace, violations, attack paths, defenses, error |
-| `GET /api/metrics` | dashboard metrics |
+| `GET /api/dashboard` | dashboard metrics |
 
 ## Testing
 
@@ -108,16 +120,20 @@ Regenerate the captured demo data (used when the API is unreachable) after backe
 behavior changes:
 
 ```bash
-cd backend && python scripts_gen_demo_data.py
+cd backend && python scripts_gen_demo_data.py frontend/public/demo_data.json
 ```
+
+`demo_data.json` is not committed — keep it out of version control.
 
 ## Neatlogs integration
 
-Every scenario execution is traced: a `WORKFLOW` span per run plus `AGENT`, `TOOL`, and
-`GUARD` spans inside the pipeline, carrying `run_id`/`scenario` attributes so findings in
-the console correlate with trace entries in Neatlogs. Errors, guard verdicts, and
-latency are captured as span events/attributes; token/cost metrics appear automatically
-for any LLM-backed steps added later.
+Every scenario execution is traced: a `WORKFLOW` span per run plus `AGENT`, `TOOL`,
+`GUARD`, and `GUARDRAIL` spans inside the pipeline, carrying `run_id`/`scenario`
+attributes so findings in the console correlate with trace entries in Neatlogs.
+Each violation emits a LOG span inline in the trace timeline; guard verdicts and
+errors do too. Because this simulator makes no LLM calls, spans carry real
+latency without token/cost metrics; adding an LLM-backed step later will surface
+those automatically.
 
 ```bash
 # backend/.env (gitignored)
@@ -131,8 +147,9 @@ Verify your setup with the SDK doctor:
 python -m neatlogs.doctor
 ```
 
-The backend reports its Neatlogs state at `/api/health`, and tests run with
-`env -u NEATLOGS_API_KEY` to prove the no-key path.
+The backend reports its Neatlogs state at `/api/health`. Tests run with
+`env -u NEATLOGS_API_KEY` to prove the no-key path; when the key is absent,
+the SDK no-ops cleanly and the pipeline still executes fully.
 
 ## Entire integration
 
@@ -155,8 +172,10 @@ entire graph snapshot --repo . --format ndjson > repository-graph.ndjson
 entire checkpoint list
 ```
 
-The graph snapshot and checkpoint refs live alongside the run artifacts
-(`.entire/` config in this repo).
+The graph snapshot and checkpoint refs live alongside the run artifacts.
+The `.entire/` config in this repo configures the checkpoint runner; commit the
+config and the generated `repository-graph.ndjson` evidence artifact, not the
+`.entire/` runtime cache.
 
 ## License & scope
 

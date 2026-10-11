@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Logo from './components/Logo';
-import { HeroShield } from './components/Illustrations';
-import { Reveal, Tilt, LayerStack } from './components/Motion';
+import { HeroShield, LayerPanels } from './components/Illustrations';
+import { Reveal, Tilt } from './components/Motion';
 
 // ── Icons (inline, line style) ─────────────────────────────────────────
 const CubeIcon = () => (
@@ -490,17 +490,39 @@ export default function Landing() {
               <Tilt max={12} scale={1.03}>
                 <HeroShield className="mx-auto float-slow" />
               </Tilt>
-              <div className="absolute right-2 top-10 hidden xl:flex flex-col gap-1.5 font-mono text-[10px] tracking-[0.2em] text-ink/70">
-                <span>TEST</span>
-                <span>DETECT</span>
-                <span>STRENGTHEN</span>
+              {/* Vertical label column on the right edge, matching the reference hero */}
+              <div className="absolute right-1 top-14 hidden xl:flex flex-col gap-1.5 font-mono text-[10px] tracking-[0.22em] text-ink/75">
+                <span className="flex items-center gap-2">
+                  <span className="w-2 h-2 bg-crimson" /> TEST
+                </span>
+                <span className="flex items-center gap-2">
+                  <span className="w-2 h-2 bg-crimson" /> DETECT
+                </span>
+                <span className="flex items-center gap-2">
+                  <span className="w-2 h-2 bg-crimson" /> STRENGTHEN
+                </span>
               </div>
-              <div className="absolute right-2 bottom-12 hidden xl:flex flex-col gap-1.5 font-mono text-[10px] tracking-[0.2em] text-muted">
-                <span>SAFER</span>
-                <span>AGENTS</span>
-                <span>STRONGER</span>
-                <span>SYSTEMS</span>
+              <div className="absolute right-1 bottom-14 hidden xl:flex flex-col gap-1.5 font-mono text-[10px] tracking-[0.22em] text-muted">
+                <span className="flex items-center gap-2">
+                  <span className="w-2 h-2 bg-ink/40" /> SAFER
+                </span>
+                <span className="flex items-center gap-2">
+                  <span className="w-2 h-2 bg-ink/40" /> AGENTS
+                </span>
+                <span className="flex items-center gap-2">
+                  <span className="w-2 h-2 bg-ink/40" /> STRONGER
+                </span>
+                <span className="flex items-center gap-2">
+                  <span className="w-2 h-2 bg-ink/40" /> SYSTEMS
+                </span>
               </div>
+
+              {/* small accent squares around the hero asset, matching the reference */}
+              <span className="absolute top-10 left-3 w-2.5 h-2.5 bg-crimson/90" />
+              <span className="absolute top-1/2 right-3 w-2 h-2 bg-crimson/80" />
+              <span className="absolute bottom-20 right-24 w-2 h-2 bg-ink/35" />
+              <span className="absolute bottom-10 left-28 w-2.5 h-2.5 bg-crimson/70" />
+              <span className="absolute top-1/3 left-8 w-2 h-2 bg-crimson/45" />
             </div>
           </div>
         </section>
@@ -521,10 +543,9 @@ export default function Landing() {
             <a href="#demo" className="mt-10 inline-flex items-center gap-2 text-sm font-semibold text-ink border-b-2 border-crimson pb-1 hover:text-crimson transition-colors">
               See how it works <ArrowRight />
             </a>
-          </div>
-          <div className="relative">
-            <LayerStack className="mx-auto" />
-            <div className="absolute right-0 top-1/2 -translate-y-1/2 hidden xl:flex flex-col gap-2 font-mono text-[10px] font-semibold tracking-wider text-ink">
+          </div>            <div className="relative">
+            <LayerPanels className="mx-auto" />
+            <div className="absolute right-1 top-1/2 -translate-y-1/2 hidden xl:flex flex-col gap-2.5 font-mono text-[10px] font-semibold tracking-wider text-ink">
               {['ANALYZE', 'FIND ROOT CAUSE', 'GET FIXES'].map((l) => (
                 <span key={l} className="flex items-center gap-2">
                   <span className="w-2 h-2 bg-crimson" /> {l}
@@ -532,6 +553,7 @@ export default function Landing() {
               ))}
             </div>
           </div>
+
         </section>
 
         {/* ── Section 02: Complete security layer ── */}
@@ -574,15 +596,15 @@ export default function Landing() {
             ].map((c) => (
               <Tilt key={c.num} max={8} scale={1.015}>
                 <div className="panel panel-shadow face-lift p-7 lg:p-8 flex flex-col hover:border-crimson/40 transition-colors group h-full">
-                <div className="flex items-center justify-between mb-10">
-                  <span className="text-crimson">{c.icon}</span>
-                  <span className="font-mono text-xs text-muted">{c.num}</span>
-                </div>
-                <h3 className="font-semibold text-ink text-lg">{c.title}</h3>
-                <p className="text-sm text-muted mt-2 leading-relaxed flex-1">{c.desc}</p>
-                <span className="mt-8 text-crimson self-end group-hover:translate-x-1 transition-transform">
-                  <ArrowRight />
-                </span>
+                  <div className="flex items-center justify-between mb-10">
+                    <span className="text-crimson">{c.icon}</span>
+                    <span className="font-mono text-xs text-muted">{c.num}</span>
+                  </div>
+                  <h3 className="font-semibold text-ink text-lg">{c.title}</h3>
+                  <p className="text-sm text-muted mt-2 leading-relaxed flex-1">{c.desc}</p>
+                  <span className="mt-8 text-crimson self-end group-hover:translate-x-1 transition-transform">
+                    <ArrowRight />
+                  </span>
                 </div>
               </Tilt>
             ))}

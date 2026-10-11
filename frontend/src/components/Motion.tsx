@@ -31,16 +31,15 @@ export function Reveal({
   threshold?: number;
 }) {
   const ref = useRef<HTMLElement | null>(null);
-  const [visible, setVisible] = useState(false);
+  // Reduced motion (or no IntersectionObserver): render revealed from the
+  // start, so nothing depends on an effect run to become visible.
+  const [visible, setVisible] = useState(
+    () => prefersReducedMotion() || typeof IntersectionObserver === 'undefined',
+  );
 
   useEffect(() => {
     const el = ref.current;
-    if (!el) return;
-    // No IntersectionObserver support (or reduced motion): show at once.
-    if (prefersReducedMotion() || typeof IntersectionObserver === 'undefined') {
-      setVisible(true);
-      return;
-    }
+    if (!el || visible) return;
     const io = new IntersectionObserver(
       (entries) => {
         for (const entry of entries) {
@@ -54,7 +53,7 @@ export function Reveal({
     );
     io.observe(el);
     return () => io.disconnect();
-  }, [threshold]);
+  }, [threshold, visible]);
 
   const Tag = as as 'div';
   return (

@@ -48,3 +48,6 @@ lerna-debug.log*
 Thumbs.db
 .vscode/
 .idea/
+
+# Frontend demo fallback data (regenerated locally, not shipped)
+frontend/public/demo_data.json
