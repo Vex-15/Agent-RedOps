@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import Logo from './components/Logo';
-import { HeroShield } from './components/Illustrations';
+import { HeroShield, LayerPanels } from './components/Illustrations';
 import { Reveal, Tilt } from './components/Motion';
 
 // ── Icons (inline, line style) ─────────────────────────────────────────
@@ -448,7 +448,7 @@ export default function Landing() {
           <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
             <div className="scanline" />
           </div>
-          <div className="max-w-7xl mx-auto px-6 grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">
+          <div className="max-w-7xl mx-auto px-6 grid lg:grid-cols-[0.9fr_1.1fr] gap-10 lg:gap-16 xl:gap-24 items-center">
             <div>
               <div className="eyebrow mb-5">AI Agent Security Testing</div>
               <h1 className="font-display text-5xl sm:text-6xl xl:text-7xl leading-[1.02] tracking-tight">
@@ -494,7 +494,7 @@ export default function Landing() {
               </div>
 
               <Tilt max={12} scale={1.03}>
-                <HeroShield className="mx-auto float-slow" />
+                <HeroShield className="mx-auto float-slow scale-105 sm:scale-110" />
               </Tilt>
 
               {/* Vertical label column on the right edge, matching the reference hero */}
@@ -535,7 +535,7 @@ export default function Landing() {
         </section>
 
         {/* ── Section 01: Vulnerability → Resilience ── */}
-        <section id="product" className="section max-w-7xl mx-auto px-6 grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">
+        <section id="product" className="section max-w-7xl mx-auto px-6 grid lg:grid-cols-[0.85fr_1.15fr] gap-12 lg:gap-20 xl:gap-28 items-center">
           <div>
             <div className="section-num mb-3">01</div>
             <h2 className="font-display text-3xl sm:text-4xl xl:text-5xl leading-tight">
@@ -552,41 +552,15 @@ export default function Landing() {
             </a>
           </div>
 
-          <div className="relative isolate overflow-hidden">
-            <div className="absolute inset-0 -z-10">
-              <div className="w-[420px] h-[320px] rounded-2xl border border-crimson/35" />
-              <div className="absolute inset-0 bg-crimson/10 blur-2xl" />
+          <div className="relative min-h-[320px] lg:min-h-[380px] flex items-center">
+            <LayerPanels className="w-full" />
+            <div className="absolute right-0 top-1/2 -translate-y-1/2 hidden xl:flex flex-col gap-3 font-mono text-[10px] font-semibold tracking-[0.18em] text-ink">
+              {['ANALYZE', 'FIND ROOT CAUSE', 'GET FIXES'].map((label) => (
+                <span key={label} className="flex items-center gap-2">
+                  <span className="w-2 h-2 bg-crimson" /> {label}
+                </span>
+              ))}
             </div>
-
-            <div className="relative flex items-center justify-center h-[280px] bg-gradient-to-tr from-crimson/10 to-transparent">
-              {/* back sheet */}
-              <div className="absolute w-[220px] h-[180px] rounded-xl border border-crimson/45 bg-crimson/12 -translate-y-6 -translate-x-6" />
-              {/* mid sheet */}
-              <div className="absolute w-[220px] h-[180px] rounded-xl border border-crimson/55 bg-crimson/22 -translate-y-2 -translate-x-10" />
-              {/* front sheet */}
-              <div className="absolute w-[220px] h-[180px] rounded-xl border border-ink/25 bg-ink/5 translate-y-[1.5rem] translate-x-[2.25rem]" />
-
-              {/* point labels, right edge */}
-              <div className="absolute right-2 top-1/2 -translate-y-1/2 flex flex-col gap-3 text-[10px] font-mono tracking-[0.28em] text-ink">
-                <span className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-crimson" /> ANALYZE
-                </span>
-                <span className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-crimson" /> FIND ROOT CAUSE
-                </span>
-                <span className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-crimson" /> GET FIXES
-                </span>
-              </div>
-            </div>
-
-            {/* floating deco squares */}
-            <span className="absolute top-4 left-3 w-2 h-2 bg-crimson/90" />
-            <span className="absolute top-8 right-4 w-2 h-2 bg-crimson/70" />
-            <span className="absolute bottom-10 right-12 w-2 h-2 bg-ink/40" />
-            <span className="absolute bottom-4 left-8 w-2 h-2 bg-crimson/55" />
-            <span className="absolute bottom-14 left-20 w-1.5 h-1.5 bg-ink/25" />
-
           </div>
 
         </section>
