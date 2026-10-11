@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import Logo from './components/Logo';
-import { HeroShield, LayerPanels } from './components/Illustrations';
+import { HeroShield } from './components/Illustrations';
 import { Reveal, Tilt } from './components/Motion';
 
 // ── Icons (inline, line style) ─────────────────────────────────────────
@@ -416,9 +416,10 @@ export default function Landing() {
             {[
               { label: 'Product', href: '#product' },
               { label: 'Scenarios', href: '#features' },
+              { label: 'Research', href: '#research' },
               { label: 'Live', href: '#/live', accent: true },
               { label: 'Docs', href: '#demo' },
-              { label: 'Pricing', href: '#product' },
+              { label: 'Pricing', href: '#pricing' },
             ].map((l) => (
               <a
                 key={l.label}
@@ -486,10 +487,16 @@ export default function Landing() {
               </div>
             </div>
 
-            <div className="relative">
+            <div className="relative isolate overflow-hidden">
+              <div className="absolute inset-0 -z-10">
+                <div className="w-[320px] h-[320px] rounded-full border border-crimson/25" />
+                <div className="absolute inset-0 bg-crimson/8 blur-3xl" />
+              </div>
+
               <Tilt max={12} scale={1.03}>
                 <HeroShield className="mx-auto float-slow" />
               </Tilt>
+
               {/* Vertical label column on the right edge, matching the reference hero */}
               <div className="absolute right-1 top-14 hidden xl:flex flex-col gap-1.5 font-mono text-[10px] tracking-[0.22em] text-ink/75">
                 <span className="flex items-center gap-2">
@@ -543,15 +550,43 @@ export default function Landing() {
             <a href="#demo" className="mt-10 inline-flex items-center gap-2 text-sm font-semibold text-ink border-b-2 border-crimson pb-1 hover:text-crimson transition-colors">
               See how it works <ArrowRight />
             </a>
-          </div>            <div className="relative">
-            <LayerPanels className="mx-auto" />
-            <div className="absolute right-1 top-1/2 -translate-y-1/2 hidden xl:flex flex-col gap-2.5 font-mono text-[10px] font-semibold tracking-wider text-ink">
-              {['ANALYZE', 'FIND ROOT CAUSE', 'GET FIXES'].map((l) => (
-                <span key={l} className="flex items-center gap-2">
-                  <span className="w-2 h-2 bg-crimson" /> {l}
-                </span>
-              ))}
+          </div>
+
+          <div className="relative isolate overflow-hidden">
+            <div className="absolute inset-0 -z-10">
+              <div className="w-[420px] h-[320px] rounded-2xl border border-crimson/35" />
+              <div className="absolute inset-0 bg-crimson/10 blur-2xl" />
             </div>
+
+            <div className="relative flex items-center justify-center h-[280px] bg-gradient-to-tr from-crimson/10 to-transparent">
+              {/* back sheet */}
+              <div className="absolute w-[220px] h-[180px] rounded-xl border border-crimson/45 bg-crimson/12 -translate-y-6 -translate-x-6" />
+              {/* mid sheet */}
+              <div className="absolute w-[220px] h-[180px] rounded-xl border border-crimson/55 bg-crimson/22 -translate-y-2 -translate-x-10" />
+              {/* front sheet */}
+              <div className="absolute w-[220px] h-[180px] rounded-xl border border-ink/25 bg-ink/5 translate-y-[1.5rem] translate-x-[2.25rem]" />
+
+              {/* point labels, right edge */}
+              <div className="absolute right-2 top-1/2 -translate-y-1/2 flex flex-col gap-3 text-[10px] font-mono tracking-[0.28em] text-ink">
+                <span className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-crimson" /> ANALYZE
+                </span>
+                <span className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-crimson" /> FIND ROOT CAUSE
+                </span>
+                <span className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-crimson" /> GET FIXES
+                </span>
+              </div>
+            </div>
+
+            {/* floating deco squares */}
+            <span className="absolute top-4 left-3 w-2 h-2 bg-crimson/90" />
+            <span className="absolute top-8 right-4 w-2 h-2 bg-crimson/70" />
+            <span className="absolute bottom-10 right-12 w-2 h-2 bg-ink/40" />
+            <span className="absolute bottom-4 left-8 w-2 h-2 bg-crimson/55" />
+            <span className="absolute bottom-14 left-20 w-1.5 h-1.5 bg-ink/25" />
+
           </div>
 
         </section>
@@ -662,7 +697,7 @@ export default function Landing() {
           </a>
           <nav className="flex flex-wrap justify-center gap-6 text-sm text-muted">
             {['Product', 'Scenarios', 'Research', 'Docs', 'Pricing'].map((l) => (
-              <a key={l} href="#product" className="hover:text-ink transition-colors">
+              <a key={l} href={`#${l.toLowerCase()}`} className="hover:text-ink transition-colors">
                 {l}
               </a>
             ))}
@@ -680,16 +715,15 @@ export default function Landing() {
               </svg>
             </a>
           </div>
-        </div>
-        <div className="max-w-7xl mx-auto px-6 mt-12 pt-8 border-t border-line flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-muted">
-          <span>© 2026 RedOps. All rights reserved.</span>
-          <div className="flex gap-5">
-            <a href="#product" className="hover:text-ink">Privacy</a>
-            <a href="#product" className="hover:text-ink">Terms</a>
-            <a href="#product" className="hover:text-ink">Contact</a>
-          </div>
-        </div>
-      </footer>
+        </div>          <div className="max-w-7xl mx-auto px-6 mt-12 pt-8 border-t border-line flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-muted">
+              <span>© 2026 RedOps. All rights reserved.</span>
+              <div className="flex gap-5">
+                <a href="#product" className="hover:text-ink">Privacy</a>
+                <a href="#product" className="hover:text-ink">Terms</a>
+                <a href="#contact" className="hover:text-ink">Contact</a>
+              </div>
+            </div>
+        </footer>
     </div>
   );
 }
