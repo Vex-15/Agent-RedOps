@@ -665,7 +665,7 @@ export default function Landing() {
             </p>
           </div>
 
-          <Reveal stagger className="grid md:grid-cols-2 xl:grid-cols-4 gap-5">
+          <Reveal stagger className="grid md:grid-cols-2 xl:grid-cols-4 gap-5 items-stretch auto-rows-fr">
             {[
               {
                 name: 'Community',
@@ -695,7 +695,7 @@ export default function Landing() {
               },
             ].map((plan) => (
               <Tilt key={plan.name} max={6} scale={1.01} className="h-full">
-                <div className={`panel panel-shadow face-lift p-6 flex flex-col h-full min-h-[430px] ${plan.name === 'Pro' ? 'border-crimson/45' : ''}`}>
+                <div className={`panel panel-shadow face-lift p-6 flex flex-col h-[430px] ${plan.name === 'Pro' ? 'border-crimson/45' : ''}`}>
                   <div className="flex items-start justify-between gap-3">
                     <h3 className="font-display text-xl text-ink">{plan.name}</h3>
                     {plan.name === 'Pro' && (
