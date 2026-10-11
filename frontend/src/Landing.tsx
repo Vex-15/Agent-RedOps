@@ -694,8 +694,8 @@ export default function Landing() {
                 features: ['Enterprise access controls and audit capabilities', 'Private deployment options, subject to implementation', 'Custom integrations', 'Dedicated support'],
               },
             ].map((plan) => (
-              <Tilt key={plan.name} max={6} scale={1.01}>
-                <div className={`panel panel-shadow face-lift p-6 flex flex-col h-full ${plan.name === 'Pro' ? 'border-crimson/45' : ''}`}>
+              <Tilt key={plan.name} max={6} scale={1.01} className="h-full">
+                <div className={`panel panel-shadow face-lift p-6 flex flex-col h-full min-h-[430px] ${plan.name === 'Pro' ? 'border-crimson/45' : ''}`}>
                   <div className="flex items-start justify-between gap-3">
                     <h3 className="font-display text-xl text-ink">{plan.name}</h3>
                     {plan.name === 'Pro' && (
@@ -704,12 +704,12 @@ export default function Landing() {
                       </span>
                     )}
                   </div>
-                  <div className="mt-6 flex items-baseline gap-1">
+                  <div className="mt-6 h-9 flex items-baseline gap-1">
                     <span className="font-display text-3xl text-crimson">{plan.price}</span>
                     {plan.suffix && <span className="text-xs text-muted">{plan.suffix}</span>}
                   </div>
                   <p className="mt-3 min-h-[3.5rem] text-sm text-muted leading-relaxed">{plan.audience}</p>
-                  <ul className="mt-6 space-y-3 border-t border-line pt-5 text-sm text-muted">
+                  <ul className="mt-6 min-h-[144px] space-y-3 border-t border-line pt-5 text-sm text-muted">
                     {plan.features.map((feature) => (
                       <li key={feature} className="flex gap-2">
                         <span className="text-crimson">✓</span>
