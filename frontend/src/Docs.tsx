@@ -29,10 +29,12 @@ export default function Docs() {
       <header className="sticky top-0 z-40 bg-paper/85 backdrop-blur border-b border-line">
         <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
           <a href="#/" className="flex items-center"><Logo /></a>
-          <nav className="hidden md:flex items-center gap-7 text-sm text-muted">
+          <nav className="hidden md:flex items-center gap-6 text-sm text-muted">
             <a href="#/" className="hover:text-ink transition-colors">Product</a>
+            <a href="#/#features" className="hover:text-ink transition-colors">Scenarios</a>
             <a href="#/live" className="text-crimson font-semibold hover:text-crimson-dark transition-colors">Live</a>
             <a href="#/docs" className="text-ink font-medium">Docs</a>
+            <a href="#/#pricing" className="hover:text-ink transition-colors">Pricing</a>
             <a href="#/console" className="hover:text-ink transition-colors">Console</a>
           </nav>
           <a href="#/live" className="bg-ink text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-crimson transition-colors">
@@ -66,7 +68,7 @@ export default function Docs() {
             <div className="section-num mb-4">INDEX</div>
             <nav className="flex lg:flex-col gap-3 flex-wrap text-sm text-muted">
               {sections.map((section) => (
-                <a key={section.id} href={`#${section.id}`} className="hover:text-crimson transition-colors">
+                <a key={section.id} href={`#/docs#${section.id}`} className="hover:text-crimson transition-colors">
                   {section.label}
                 </a>
               ))}

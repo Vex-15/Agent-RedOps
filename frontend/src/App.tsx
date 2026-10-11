@@ -6,7 +6,7 @@ import LiveStream from './LiveStream';
 import Docs from './Docs';
 
 function useHashRoute(): string {
-  const get = () => window.location.hash.replace(/^#\/?/, '');
+  const get = () => window.location.hash.replace(/^#\/?/, '').split('#', 1)[0].split('?', 1)[0];
   const [route, setRoute] = useState(get);
   useEffect(() => {
     const onChange = () => setRoute(get());

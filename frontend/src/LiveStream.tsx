@@ -21,6 +21,13 @@ import {
   type LiveState,
 } from './lib/liveState';
 
+function formatLocalTime(timestamp: string): string {
+  const date = new Date(timestamp);
+  return Number.isNaN(date.getTime())
+    ? timestamp
+    : date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', second: '2-digit' });
+}
+
 /**
  * Dedicated live-streaming page (#/live).
  *
@@ -174,7 +181,7 @@ function EventRow({
         </div>
       </div>
       <span className="font-mono text-[9px] text-muted pt-0.5 shrink-0">
-        {timestamp.slice(11, 19)}
+        {formatLocalTime(timestamp)}
       </span>
     </div>
   );

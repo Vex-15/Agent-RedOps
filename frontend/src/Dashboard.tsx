@@ -36,6 +36,13 @@ function SourceBadge({ source }: { source?: string }) {
   return <Badge tone={source === 'demo' || !source ? 'gray' : 'green'}>{labels[source ?? 'demo'] ?? source}</Badge>;
 }
 
+function formatLocalTime(timestamp: string): string {
+  const date = new Date(timestamp);
+  return Number.isNaN(date.getTime())
+    ? timestamp
+    : date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', second: '2-digit' });
+}
+
 // ── Report export ──────────────────────────────────────────────────────
 
 function download(filename: string, content: string, mime: string) {
@@ -58,7 +65,7 @@ function buildMarkdownReport(detail: RunDetail): string {
   lines.push(`- **Latency:** ${detail.latency_ms} ms`);
   lines.push(`- **Trace events:** ${detail.trace.length}`);
   lines.push(`- **Attack paths:** ${detail.attack_paths.length}`);
-  lines.push(`- **Generated:** ${new Date().toISOString()}`);
+  lines.push(`- **Generated:** ${new Date().toLocaleString()}`);
   lines.push('');
 
   lines.push('## Findings');
@@ -211,7 +218,7 @@ export function LiveExecutionPanel({ state, onCancel }: { state: LiveState; onCa
                   </div>
                 </div>
                 <span className="font-mono text-[9px] text-muted pt-0.5 shrink-0">
-                  {ev.timestamp.slice(11, 19)}
+                  {formatLocalTime(ev.timestamp)}
                 </span>
               </div>
             );
@@ -412,17 +419,17 @@ export default function Dashboard() {
         </div>
 
         {/* ── Main grid ── */}
-        <div className="grid lg:grid-cols-5 gap-6">
+        <div className="grid 2xl:grid-cols-5 gap-6">
           {/* Left column */}
-          <div className="lg:col-span-3 space-y-6">
+          <div className="2xl:col-span-3 min-w-0 space-y-6">
             {/* Runs table (paginated — latest first, PAGE_SIZE rows per page) */}
             <section className="panel panel-shadow overflow-hidden">
               <div className="px-5 py-3.5 border-b border-line bg-lab/50 flex items-center justify-between">
                 <h2 className="text-sm font-semibold">Recent Execution Runs</h2>
                 <span className="font-mono text-[11px] text-muted">select a run to inspect</span>
               </div>
-              <div className="hidden xl:block overflow-hidden">
-                <table className="w-full text-left text-sm">
+              <div className="hidden 2xl:block overflow-hidden">
+                <table className="w-full table-fixed text-left text-sm">
                   <thead className="text-[11px] uppercase tracking-wider text-muted border-b border-line">
                     <tr>
                       <th className="px-5 py-2.5 font-mono">Run ID</th>
@@ -475,7 +482,7 @@ export default function Dashboard() {
                   </tbody>
                 </table>
               </div>
-              <div className="xl:hidden divide-y divide-line">
+              <div className="2xl:hidden divide-y divide-line">
                 {loading && visibleRuns.length === 0 && (
                   <div className="px-5 py-8 text-center text-sm text-muted">Loading runs…</div>
                 )}
@@ -536,7 +543,7 @@ export default function Dashboard() {
           </div>
 
           {/* Right column: inspector */}
-          <div className="lg:col-span-2">
+          <div className="2xl:col-span-2 min-w-0">
             <section className="panel panel-shadow p-5 lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto">
               <div className="flex items-center justify-between mb-4 gap-2">
                 <h2 className="text-sm font-semibold">Attack Path &amp; Defense Trace</h2>
@@ -704,7 +711,7 @@ export default function Dashboard() {
                                         <div className="text-[10px] text-muted font-mono">{ev.kind}</div>
                                       </div>
                                       <span className="font-mono text-[9px] text-muted pt-0.5 shrink-0">
-                                        {ev.timestamp.slice(11, 19)}
+                                        {formatLocalTime(ev.timestamp)}
                                       </span>
                                     </button>
                                     {open && (
