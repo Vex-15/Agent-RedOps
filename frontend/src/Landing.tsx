@@ -416,10 +416,10 @@ export default function Landing() {
             {[
               { label: 'Product', href: '#product' },
               { label: 'Scenarios', href: '#features' },
-              { label: 'Research', href: '#research' },
               { label: 'Live', href: '#/live', accent: true },
-              { label: 'Docs', href: '#demo' },
+              { label: 'Docs', href: '#/docs' },
               { label: 'Pricing', href: '#pricing' },
+              { label: 'Console', href: '#/console' },
             ].map((l) => (
               <a
                 key={l.label}
@@ -758,9 +758,16 @@ export default function Landing() {
             <Logo />
           </a>
           <nav className="flex flex-wrap justify-center gap-6 text-sm text-muted">
-            {['Product', 'Scenarios', 'Research', 'Docs', 'Pricing'].map((l) => (
-              <a key={l} href={`#${l.toLowerCase()}`} className="hover:text-ink transition-colors">
-                {l}
+            {[
+              ['Product', '#product'],
+              ['Scenarios', '#features'],
+              ['Live', '#/live'],
+              ['Docs', '#/docs'],
+              ['Pricing', '#pricing'],
+              ['Console', '#/console'],
+            ].map(([label, href]) => (
+              <a key={label} href={href} className="hover:text-ink transition-colors">
+                {label}
               </a>
             ))}
           </nav>
