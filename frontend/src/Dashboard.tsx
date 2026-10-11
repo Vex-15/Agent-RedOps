@@ -4,10 +4,6 @@ import {
   getScenarios,
   getRuns,
   getRunDetail,
-  runScenario,
-  runAllScenarios,
-  streamScenarioRun,
-  streamAllRuns,
   getDashboardMetrics,
   type ScenarioItem,
   type RunItem,
@@ -16,7 +12,7 @@ import {
   type TraceEvent,
 } from './lib/api';
 import { Badge, StatusBadge } from './components/Badge';
-import { EMPTY_LIVE, PHASE_LABEL, applyStreamMsg, type LiveState } from './lib/liveState';
+import { PHASE_LABEL, type LiveState } from './lib/liveState';
 
 // ── Small UI atoms ─────────────────────────────────────────────────────
 
@@ -113,11 +109,9 @@ function buildMarkdownReport(detail: RunDetail): string {
 
 
 /**
- * Renders a run as it executes: a phase ticker over a trace that grows
- * event by event.  Defended re-run events are tagged so the audience can
- * see the guards intercept the attack on the second pass.
+ * Renders persisted run details, findings, evidence, and verified defenses.
  */
-function LiveExecutionPanel({ state, onCancel }: { state: LiveState; onCancel: () => void }) {
+export function LiveExecutionPanel({ state, onCancel }: { state: LiveState; onCancel: () => void }) {
   const done = state.phase === 'done';
   const blocked = state.defenses.filter((d) => d.verdict === 'blocked').length;
 
@@ -263,13 +257,10 @@ export default function Dashboard() {
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [detail, setDetail] = useState<RunDetail | null>(null);
-  const [busyId, setBusyId] = useState<number | null>(null);
-  const [allBusy, setAllBusy] = useState(false);
   const [live, setLive] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
   const [openEventId, setOpenEventId] = useState<string | null>(null);
   const [selectedViolationId, setSelectedViolationId] = useState<string | null>(null);
-  const [liveRun, setLiveRun] = useState<LiveState | null>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -294,65 +285,7 @@ export default function Dashboard() {
     setSelectedViolationId(res.data.violations[0]?.id ?? null);
   };
 
-  /**
-   * Run one scenario.  Against a live backend we stream it so the attack
-   * unfolds in the inspector; if streaming is unavailable we fall back to
-   * the blocking call, and in demo mode to the local simulation.
-   */
-  const execute = async (scenarioId: number) => {
-    setBusyId(scenarioId);
-    const scenario = scenarios.find((s) => s.id === scenarioId);
-
-    if (live) {
-      setLiveRun({ ...EMPTY_LIVE, scenarioName: scenario?.name ?? '', message: 'Starting execution…' });
-      const res = await streamScenarioRun(scenarioId, (msg) => {
-        setLiveRun((prev) => applyStreamMsg(prev ?? EMPTY_LIVE, msg));
-      });
-
-      if (res.ok && res.runIds.length > 0) {
-        await loadDetail(res.runIds[0]);
-        await refresh();
-        setLiveRun(null);
-        setBusyId(null);
-        return;
-      }
-      // Streaming unavailable — fall through to the blocking call.
-      setLiveRun(null);
-    }
-
-    const res = await runScenario(scenarioId);
-    if (res && typeof res.run_id === 'string') await loadDetail(res.run_id);
-    await refresh();
-    setBusyId(null);
-  };
-
-  const executeAll = async () => {
-    setAllBusy(true);
-
-    if (live) {
-      setLiveRun({ ...EMPTY_LIVE, message: 'Starting batch…' });
-      const res = await streamAllRuns((msg) => {
-        setLiveRun((prev) => applyStreamMsg(prev ?? EMPTY_LIVE, msg));
-      });
-      if (res.ok && res.runIds.length > 0) {
-        await loadDetail(res.runIds[res.runIds.length - 1]);
-        await refresh();
-        setLiveRun(null);
-        setAllBusy(false);
-        return;
-      }
-      setLiveRun(null);
-    }
-
-    await runAllScenarios();
-    await refresh();
-    setAllBusy(false);
-  };
-
-  const cancelLive = () => setLiveRun(null);
-
   const selectedRun = runs.find((r) => r.run_id === selectedRunId) ?? null;
-  const isBusy = busyId !== null;
   const failedRuns = runs.filter((r) => (r.status || '').toLowerCase() === 'failed').length;
 
   // Recent runs are paginated: up to PAGE_SIZE rows per page, most recent first.
@@ -416,13 +349,9 @@ export default function Dashboard() {
             >
               {live === null ? 'connecting…' : live ? 'backend live' : 'demo mode'}
             </span>
-            <button
-              onClick={executeAll}
-              disabled={allBusy || isBusy}
-              className="btn-primary !py-1.5 !px-4 text-[13px] disabled:opacity-60"
-            >
-              <span>▶</span> {allBusy ? 'Running…' : 'Run All Scenarios'}
-            </button>
+            <a href="#/live" className="btn-primary !py-1.5 !px-4 text-[13px]">
+              Start in Live Stream →
+            </a>
           </div>
         </div>
       </header>
@@ -453,8 +382,8 @@ export default function Dashboard() {
             AGENT <span className="text-crimson">CONSOLE</span>
           </h1>
           <p className="text-muted text-sm mt-3 max-w-xl">
-            Run scenarios against the simulated requester → vendor → approver → purchaser → auditor pipeline, inspect
-            deception traces, and verify guards neutralize every attack path.
+            Review historical executions, investigate findings and evidence, and export security reports. Start new
+            tests in the Live Stream playground.
           </p>
         </div>
 
@@ -484,53 +413,6 @@ export default function Dashboard() {
         <div className="grid lg:grid-cols-5 gap-6">
           {/* Left column */}
           <div className="lg:col-span-3 space-y-6">
-            {/* Scenarios */}
-            <section className="panel panel-shadow overflow-hidden">
-              <div className="px-5 py-3.5 border-b border-line flex items-center justify-between bg-lab/50">
-                <h2 className="text-sm font-semibold">Security Scenarios</h2>
-                <span className="font-mono text-[11px] text-muted">Requester → Vendor → Approver → Purchaser → Auditor</span>
-              </div>
-              <div className="divide-y divide-line">
-                {loading && scenarios.length === 0 && (
-                  <div className="px-5 py-8 text-center text-sm text-muted">Loading scenarios…</div>
-                )}
-                {scenarios.map((sc) => (
-                  <div key={sc.id} className="px-5 py-4 hover:bg-crimson-faint/40 transition-colors">
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-mono text-[11px] px-2 py-0.5 rounded border border-line bg-lab text-muted">
-                            SC-{String(sc.id).padStart(2, '0')}
-                          </span>
-                          <h3 className="font-medium text-sm">{sc.name}</h3>
-                          {sc.expected_outcome === 'failed' && <Badge tone="amber">failure demo</Badge>}
-                        </div>
-                        <p className="text-muted text-[13px] mt-1">{sc.description}</p>
-                        <div className="flex flex-wrap gap-1.5 mt-2.5">
-                          {sc.expected_violations.length > 0 ? (
-                            sc.expected_violations.map((v) => (
-                              <Badge key={v} tone="red">
-                                {v}
-                              </Badge>
-                            ))
-                          ) : (
-                            <Badge tone="green">Positive Baseline</Badge>
-                          )}
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => execute(sc.id)}
-                        disabled={isBusy || allBusy}
-                        className="btn-secondary !py-1.5 !px-3 text-xs whitespace-nowrap disabled:opacity-50"
-                      >
-                        {busyId === sc.id ? 'Running…' : 'Run Test'}
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
-
             {/* Runs table (paginated — latest first, PAGE_SIZE rows per page) */}
             <section className="panel panel-shadow overflow-hidden">
               <div className="px-5 py-3.5 border-b border-line bg-lab/50 flex items-center justify-between">
@@ -598,7 +480,6 @@ export default function Dashboard() {
                   </span>
                   <button
                     onClick={loadOlderRuns}
-                    disabled={isBusy || allBusy}
                     className="text-[11px] font-mono border border-line-strong bg-panel text-muted hover:text-ink hover:border-crimson px-3 py-1 rounded transition-colors disabled:opacity-50"
                   >
                     Load older runs ↓
@@ -615,9 +496,6 @@ export default function Dashboard() {
 
           {/* Right column: inspector */}
           <div className="lg:col-span-2">
-            {liveRun ? (
-              <LiveExecutionPanel state={liveRun} onCancel={cancelLive} />
-            ) : (
             <section className="panel panel-shadow p-5 lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto">
               <div className="flex items-center justify-between mb-4 gap-2">
                 <h2 className="text-sm font-semibold">Attack Path &amp; Defense Trace</h2>
@@ -872,7 +750,6 @@ export default function Dashboard() {
                 </div>
               )}
             </section>
-            )}
           </div>
         </div>
       </div>
@@ -881,7 +758,11 @@ export default function Dashboard() {
       <footer className="border-t border-line py-5">
         <div className="max-w-7xl mx-auto px-6 flex items-center justify-between text-xs text-muted">
           <span>© 2026 RedOps · Agent Console</span>
-          <span className="font-mono">Simulated environment · no real purchases executed</span>
+          <div className="flex items-center gap-4">
+            <a href="#/live" className="text-crimson hover:underline">Open Live Stream</a>
+            <a href="#/docs" className="hover:text-ink">Docs</a>
+            <span className="font-mono">No real purchases executed</span>
+          </div>
         </div>
       </footer>
     </div>
