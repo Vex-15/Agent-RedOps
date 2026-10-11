@@ -1,0 +1,37 @@
+{
+  "id": "trail-confidence",
+  "display_name": "Confidence Eval",
+  "enabled": true,
+  "scope": "trail",
+  "runtime": {
+    "kind": "prompt_runner",
+    "agent": "claude",
+    "timeout_ms": 300000,
+    "sandbox": {
+      "base_template": "claude",
+      "repo_token": "read"
+    }
+  },
+  "automation": {
+    "kind": "trail_prompt"
+  },
+  "prompt": {
+    "template": "You are a confidence evaluator. Analyze the changes on branch \"{{branch}}\" compared to \"{{base_branch}}\".\n\nRun `git diff origin/{{base_branch}}...HEAD` to inspect the changes. Score confidence from 0 to 100 based on deterministic scenario execution, trust-boundary guard enforcement, defended re-runs proving attacks are blocked, trace/analyzer evidence correctness, backend/frontend contract consistency, malformed-payload recovery, and focused validation of the affected path.\n\nScore bands: 0-20 = likely broken, unvalidated, or undermines live execution; 21-40 = major gaps in guards, scenarios, traces, recovery, or API/UI behavior; 41-60 = plausible but important attack, failure, or contract paths remain unverified; 61-80 = coherent and mostly validated with minor gaps; 81-100 = focused change with strong evidence across execution, defense verification, trace evidence, recovery, and affected UI behavior.\n\nOutput ONLY this JSON object as the very last line of your response:\n\n{\"value\": <number 0-100>, \"rationale\": \"<1-2 sentence explanation>\"}"
+  },
+  "select": {
+    "trigger_types": [
+      "api",
+      "push"
+    ]
+  },
+  "output": {
+    "adapter": "last_json_line",
+    "result_type": "trail_monitor",
+    "trail_monitor": {
+      "key": "confidence",
+      "label": "Confidence",
+      "value_type": "percent",
+      "polarity": "higher_is_better"
+    }
+  }
+}

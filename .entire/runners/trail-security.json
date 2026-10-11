@@ -1,0 +1,37 @@
+{
+  "id": "trail-security",
+  "display_name": "Security Review",
+  "enabled": true,
+  "scope": "trail",
+  "runtime": {
+    "kind": "prompt_runner",
+    "agent": "claude",
+    "timeout_ms": 300000,
+    "sandbox": {
+      "base_template": "claude",
+      "repo_token": "read"
+    }
+  },
+  "automation": {
+    "kind": "trail_prompt"
+  },
+  "prompt": {
+    "template": "You are a security risk evaluator. Analyze the changes on branch \"{{branch}}\" compared to \"{{base_branch}}\".\n\nRun `git diff origin/{{base_branch}}...HEAD` to inspect the changes. Review adversarially for weakened trust-boundary validation, forged or stale approval and amount acceptance, vendor identity or registration bypasses, budget or credit-limit bypasses, instruction-override errors, post-approval tampering, malformed payload acceptance or crashes, missing guard trace markers, misleading defense evidence, and credential tokens exposed in usage output, traces, JSON, or Markdown.\n\nScore bands: 0-20 = no meaningful security surface or clearly preserves validation and evidence; 21-40 = minor defense-in-depth concern with no evident bypass; 41-60 = changes security-relevant validation, recovery, or evidence and leaves plausible attack paths; 61-80 = a concrete scenario can evade a guard, authorize an invalid procurement action, produce misleading findings, crash on hostile input, or expose sensitive data; 81-100 = directly removes or bypasses a core guard or trust boundary, enables unauthorized flow behavior, or broadly compromises execution evidence or secrets.\n\nOutput ONLY this JSON object as the very last line of your response:\n\n{\"value\": <number 0-100>, \"rationale\": \"<1-2 sentence explanation>\"}"
+  },
+  "select": {
+    "trigger_types": [
+      "api",
+      "push"
+    ]
+  },
+  "output": {
+    "adapter": "last_json_line",
+    "result_type": "trail_monitor",
+    "trail_monitor": {
+      "key": "security",
+      "label": "Security",
+      "value_type": "percent",
+      "polarity": "lower_is_better"
+    }
+  }
+}

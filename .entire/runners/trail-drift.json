@@ -1,0 +1,37 @@
+{
+  "id": "trail-drift",
+  "display_name": "Drift Eval",
+  "enabled": true,
+  "scope": "trail",
+  "runtime": {
+    "kind": "prompt_runner",
+    "agent": "claude",
+    "timeout_ms": 300000,
+    "sandbox": {
+      "base_template": "claude",
+      "repo_token": "read"
+    }
+  },
+  "automation": {
+    "kind": "trail_prompt"
+  },
+  "prompt": {
+    "template": "You are a drift evaluator. Analyze the changes on branch \"{{branch}}\" compared to \"{{base_branch}}\".\n\nRun `git diff origin/{{base_branch}}...HEAD` to inspect the changes, then score drift from 0 to 100 (higher = more deviation from established project patterns). Consider the backend/frontend split, deterministic requester-to-auditor scenarios, composable trust-boundary guards, trace spans with evidence ids and defense markers, defended re-runs, and the existing PowerShell development workflow.\n\nScore bands: 0-20 = follows existing architecture, naming, and execution flow; 21-40 = small localized variation; 41-60 = noticeable new pattern, duplicated pipeline logic, or inconsistent contract; 61-80 = substantial bypass of established scenario, guard, trace, recovery, or backend/frontend conventions; 81-100 = introduces unrelated architecture or replaces deterministic, traceable, verified execution with opaque or ad hoc behavior.\n\nOutput ONLY this JSON object as the very last line of your response:\n\n{\"value\": <number 0-100>, \"rationale\": \"<1-2 sentence explanation>\"}"
+  },
+  "select": {
+    "trigger_types": [
+      "api",
+      "push"
+    ]
+  },
+  "output": {
+    "adapter": "last_json_line",
+    "result_type": "trail_monitor",
+    "trail_monitor": {
+      "key": "drift",
+      "label": "Drift",
+      "value_type": "percent",
+      "polarity": "lower_is_better"
+    }
+  }
+}
