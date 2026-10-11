@@ -5,3 +5,4 @@ pydantic
 neatlogs
 pytest
 httpx
+python-dotenv

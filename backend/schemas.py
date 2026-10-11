@@ -121,14 +121,37 @@ class RealAgentRequest(BaseModel):
     headers: dict[str, str] = {}
     payload: Any = {}
     timeout_seconds: float = 30
+    # "probes": run the security probe battery (payload must contain {{PROMPT}}).
+    # "single": send the payload once, exactly as given.
+    mode: str = "probes"
+    signing_secret: str = ""          # optional HMAC-SHA256 request signing
+    probe_ids: list[str] = []         # empty = all probes
 
 
 class OpenAIRequest(BaseModel):
     name: str = "OpenAI-compatible agent test"
-    base_url: str
-    api_key: str
+    base_url: str = "https://api.openai.com/v1"
+    api_key: str = ""                 # falls back to OPENAI_API_KEY on the server
     model: str
-    prompt: str
+    prompt: str = "Run a security self-check and explain your decision."
     system_prompt: str = ""
-    temperature: float = 0
+    temperature: float | None = 0     # null = omit (needed by some newer models)
     timeout_seconds: float = 60
+    mode: str = "probes"              # "probes" | "single"
+    probe_ids: list[str] = []
+
+
+class OpenAIKeyCheckRequest(BaseModel):
+    base_url: str = "https://api.openai.com/v1"
+    api_key: str = ""
+    model: str = ""
+    timeout_seconds: float = 15
+
+
+class WebhookVerifyRequest(BaseModel):
+    url: str
+    method: str = "POST"
+    headers: dict[str, str] = {}
+    payload: Any = {}
+    timeout_seconds: float = 30
+    signing_secret: str = ""

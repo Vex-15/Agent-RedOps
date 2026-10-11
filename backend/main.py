@@ -29,7 +29,12 @@ from scenarios.builtin import BUILTIN_SCENARIOS
 from scenarios.runner import run_scenario, stream_scenario
 from core.types import PipelineResult
 from core.serialize import to_dict as _serialize_dataclass
-from real_agents import stream_http_agent, openai_payload
+from real_agents import (
+    AgentTarget, check_target_url, key_format_issues, normalize_openai_base, openai_payload,
+    resolve_openai_key, stream_http_agent, stream_openai_agent, stream_probe_agent,
+    substitute_prompt, validate_openai_key, verify_webhook, PROMPT_PLACEHOLDER,
+)
+from real_probes import PROBES
 
 # ── Neatlogs ───────────────────────────────────────────────────────────
 # Load backend/.env (NEATLOGS_API_KEY) before init(); the key is never
@@ -468,51 +473,102 @@ def _real_stream(messages, source: str):
             yield json.dumps(msg, default=str) + "\n"
 
 
-@app.post("/api/real-agents/webhook/stream")
-def stream_real_webhook(request: schemas.RealAgentRequest):
-    """Test a user-owned REST agent with one real request."""
+_NDJSON_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
+
+
+def _webhook_target(request: schemas.RealAgentRequest | schemas.WebhookVerifyRequest) -> AgentTarget:
     if request.method.upper() not in {"POST", "PUT", "PATCH"}:
         raise HTTPException(400, "Only POST, PUT, and PATCH are supported for JSON agent payloads")
     if not request.url.startswith(("http://", "https://")):
         raise HTTPException(400, "Agent URL must use http:// or https://")
     if request.timeout_seconds <= 0 or request.timeout_seconds > 300:
         raise HTTPException(400, "timeout_seconds must be between 0 and 300")
-    return StreamingResponse(
-        _real_stream(stream_http_agent(
-            name=request.name,
-            url=request.url,
-            method=request.method,
-            headers=request.headers,
-            payload=request.payload,
-            timeout_seconds=request.timeout_seconds,
-        ), source="webhook"),
-        media_type="application/x-ndjson",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    blocked = check_target_url(request.url)
+    if blocked:
+        raise HTTPException(400, blocked)
+    return AgentTarget(
+        kind="webhook", url=request.url, method=request.method.upper(),
+        headers=request.headers, payload_template=request.payload,
+        signing_secret=request.signing_secret, timeout_seconds=request.timeout_seconds,
     )
 
 
-@app.post("/api/real-agents/openai/stream")
-def stream_openai_agent(request: schemas.OpenAIRequest):
-    """Test an OpenAI-compatible chat-completions endpoint with one real request."""
-    if not request.base_url.startswith(("http://", "https://")):
-        raise HTTPException(400, "base_url must use http:// or https://")
-    if not request.api_key:
-        raise HTTPException(400, "api_key is required to make a real request")
-    url = request.base_url.rstrip("/")
-    if not url.endswith("/chat/completions"):
-        url += "/chat/completions"
-    payload = openai_payload(request.model, request.prompt, request.system_prompt, request.temperature)
-    return StreamingResponse(
-        _real_stream(stream_http_agent(
-            name=request.name,
-            url=url,
-            method="POST",
-            headers={"Authorization": f"Bearer {request.api_key}", "Content-Type": "application/json"},
-            payload=payload,
+@app.get("/api/real-agents/probes")
+def list_probes():
+    """The security probes RedOps can run against a real agent."""
+    return [
+        {"id": p.id, "title": p.title, "category": p.category.value, "severity": p.severity.value,
+         "description": p.description, "needs_openai_mode": p.needs_planted_secret}
+        for p in PROBES
+    ]
+
+
+@app.post("/api/real-agents/webhook/verify")
+def verify_real_webhook(request: schemas.WebhookVerifyRequest):
+    """Send one benign real request to confirm the webhook is reachable and answers."""
+    return verify_webhook(_webhook_target(request))
+
+
+@app.post("/api/real-agents/webhook/stream")
+def stream_real_webhook(request: schemas.RealAgentRequest):
+    """Test a user-owned REST agent over real HTTP (probe battery or one request)."""
+    if request.mode not in {"probes", "single"}:
+        raise HTTPException(400, "mode must be 'probes' or 'single'")
+    target = _webhook_target(request)
+    if request.mode == "probes":
+        _, hits = substitute_prompt(request.payload, "x")
+        if hits == 0:
+            raise HTTPException(400, f"In probe mode the payload must contain {PROMPT_PLACEHOLDER} where the test prompt goes")
+        unknown = set(request.probe_ids) - {p.id for p in PROBES}
+        if unknown:
+            raise HTTPException(400, f"Unknown probe id(s): {', '.join(sorted(unknown))}")
+        messages = stream_probe_agent(target, request.name, request.probe_ids or None)
+    else:
+        messages = stream_http_agent(
+            name=request.name, url=request.url, method=request.method,
+            headers=request.headers, payload=request.payload,
             timeout_seconds=request.timeout_seconds,
-        ), source="openai"),
-        media_type="application/x-ndjson",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
+    return StreamingResponse(_real_stream(messages, source="webhook"), media_type="application/x-ndjson", headers=_NDJSON_HEADERS)
+
+
+@app.post("/api/real-agents/openai/validate-key")
+def validate_key(request: schemas.OpenAIKeyCheckRequest):
+    """Check an OpenAI-compatible API key against the real API. Never returns the key."""
+    return validate_openai_key(request.api_key, request.base_url, request.model or None,
+                               max(1.0, min(request.timeout_seconds, 60)))
+
+
+@app.post("/api/real-agents/openai/stream")
+def stream_openai(request: schemas.OpenAIRequest):
+    """Check the key, then test an OpenAI-compatible agent with real requests."""
+    if request.mode not in {"probes", "single"}:
+        raise HTTPException(400, "mode must be 'probes' or 'single'")
+    base = normalize_openai_base(request.base_url)
+    if not base.startswith(("http://", "https://")):
+        raise HTTPException(400, "base_url must use http:// or https://")
+    if not request.model.strip():
+        raise HTTPException(400, "model is required")
+    if request.timeout_seconds <= 0 or request.timeout_seconds > 300:
+        raise HTTPException(400, "timeout_seconds must be between 0 and 300")
+    key = resolve_openai_key(request.api_key)
+    issues = key_format_issues(key, base)
+    if issues:
+        raise HTTPException(400, "; ".join(issues))
+    blocked = check_target_url(base)
+    if blocked:
+        raise HTTPException(400, blocked)
+    unknown = set(request.probe_ids) - {p.id for p in PROBES}
+    if unknown:
+        raise HTTPException(400, f"Unknown probe id(s): {', '.join(sorted(unknown))}")
+    target = AgentTarget(
+        kind="openai", url=base, api_key=key, model=request.model.strip(),
+        system_prompt=request.system_prompt, temperature=request.temperature,
+        timeout_seconds=request.timeout_seconds,
+    )
+    return StreamingResponse(
+        _real_stream(stream_openai_agent(target, request.name, request.mode, request.prompt, request.probe_ids or None), source="openai"),
+        media_type="application/x-ndjson", headers=_NDJSON_HEADERS,
     )
 
 
@@ -579,5 +635,6 @@ def health():
         "neatlogs": _neatlogs_ok,
         "neatlogs_workflow": NEATLOGS_WORKFLOW if _neatlogs_ok else None,
         "neatlogs_api_key_configured": bool(os.environ.get("NEATLOGS_API_KEY")),
+        "openai_env_key_configured": bool(os.environ.get("OPENAI_API_KEY")),
         "version": "0.2.0",
     }
