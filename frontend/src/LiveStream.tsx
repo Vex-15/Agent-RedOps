@@ -26,10 +26,14 @@ import {
 } from './lib/liveState';
 
 function formatLocalTime(timestamp: string): string {
-  const date = new Date(timestamp);
-  return Number.isNaN(date.getTime())
-    ? timestamp
-    : date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', second: '2-digit' });
+  const value = timestamp.trim();
+  const date = new Date(/(?:Z|[+-]\d{2}:?\d{2})$/i.test(value) ? value : `${value}Z`);
+  if (Number.isNaN(date.getTime())) return timestamp;
+  return new Intl.DateTimeFormat(undefined, {
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit',
+  }).format(date);
 }
 
 /**
@@ -597,9 +601,9 @@ export default function LiveStream() {
       </section>
 
       {/* ── Main grid ── */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 py-10 lg:py-12 grid xl:grid-cols-5 gap-8">
+      <section className="live-main-grid max-w-7xl mx-auto px-4 sm:px-6 py-10 lg:py-12 grid grid-cols-1 2xl:grid-cols-5 gap-8">
         {/* Left: phase rail + feed */}
-        <div className="xl:col-span-3 min-w-0 space-y-6">
+        <div className="col-span-full 2xl:col-span-3 min-w-0 space-y-6">
           <PhaseRail phase={state.phase} running={running} />
 
           <div className="panel panel-shadow overflow-hidden">
@@ -657,7 +661,7 @@ export default function LiveStream() {
         </div>
 
         {/* Right: HUD */}
-        <div className="xl:col-span-2 min-w-0 space-y-6">
+        <div className="col-span-full 2xl:col-span-2 min-w-0 space-y-6">
           <div className="grid grid-cols-2 gap-3">
             <StatTile label="Events" value={counts.total} tone="ink" note={`${counts.insecure} insecure · ${counts.defended} defended`} />
             <StatTile label="Findings" value={counts.findings} tone="red" note="policy violations" />

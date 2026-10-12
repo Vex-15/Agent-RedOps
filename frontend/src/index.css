@@ -250,6 +250,26 @@ body {
   display: flex;
   flex-direction: column;
 }
+.live-main-grid {
+  display: flex !important;
+  flex-direction: column;
+}
+.live-main-grid > div {
+  align-self: start;
+  width: 100%;
+}
+.live-main-grid .scene {
+  height: auto;
+}
+@media (min-width: 1600px) {
+  .live-main-grid {
+    display: grid !important;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+  .live-main-grid > div {
+    align-self: start;
+  }
+}
 .preserve-3d {
   transform-style: preserve-3d;
 }
