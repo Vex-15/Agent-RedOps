@@ -236,6 +236,19 @@ body {
 /* 3D scene: set `perspective` on the parent of a .tilt element. */
 .scene {
   perspective: 1100px;
+  height: 100%;
+  /* The .scene is stretched by the grid cell (align-items: stretch). Make it
+     a flex column so the inner .tilt fills the full height, letting the card's
+     h-full resolve against the real row height — that keeps every card in a
+     row the same height with buttons aligned. The tilt's hover scale is a
+     transform, so it won't disturb this layout box. */
+  display: flex;
+  flex-direction: column;
+}
+.scene > .tilt {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
 }
 .preserve-3d {
   transform-style: preserve-3d;

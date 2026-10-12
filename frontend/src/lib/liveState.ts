@@ -40,6 +40,10 @@ export const EMPTY_LIVE: LiveState = {
 
 export const PHASE_LABEL: Record<string, string> = {
   start: 'connecting',
+  keycheck: 'checking api key',
+  control: 'control request',
+  probe: 'security probes',
+  error: 'failed',
   insecure: 'insecure pipeline',
   analyze: 'analyzing',
   defend: 'defense verification',

@@ -20,7 +20,10 @@ const apiRows = [
   ['GET', '/api/runs', 'Read persisted execution history'],
   ['GET', '/api/runs/{run_id}', 'Inspect traces, findings, and defenses'],
   ['POST', '/api/real-agents/webhook/stream', 'Test a user-owned HTTP agent'],
+  ['POST', '/api/real-agents/openai/validate-key', 'Check an OpenAI-compatible API key'],
   ['POST', '/api/real-agents/openai/stream', 'Test an OpenAI-compatible agent'],
+  ['POST', '/api/real-agents/webhook/verify', 'Verify a webhook is reachable'],
+  ['GET', '/api/real-agents/probes', 'List the security probes'],
 ];
 
 export default function Docs() {

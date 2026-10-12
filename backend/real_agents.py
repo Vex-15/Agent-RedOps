@@ -795,7 +795,7 @@ def stream_openai_agent(
         "api_key_check",
         EventKind.TOOL_RESULT if check["status"] not in _BLOCKING_KEY_STATES else EventKind.ERROR,
         {"base_url": check["base_url"], "key": check["key_hint"], "key_source": check["key_source"]},
-        {k: check[k] for k in ("status", "http_status", "message", "model_available", "models_listed", "organization", "request_id")},
+        {k: check[k] for k in ("status", "http_status", "message", "model_available", "models_listed", "organization", "request_id") },
         {"transport": "http", "key_check": True, "latency_ms": check["latency_ms"]},
     )
     yield {"type": "event", "event": key_event, "phase": "keycheck"}

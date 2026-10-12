@@ -430,24 +430,104 @@ export async function streamAllRuns(
   return readStream(`/runs/stream-all?delay_ms=${delayMs}`, onMessage, signal);
 }
 
+export type RealAgentMode = 'probes' | 'single';
+
 export interface RealWebhookConfig {
   name: string;
   url: string;
   method: 'POST' | 'PUT' | 'PATCH';
   headers: Record<string, string>;
+  /** In probe mode this must contain the {{PROMPT}} placeholder. */
   payload: unknown;
   timeout_seconds: number;
+  mode: RealAgentMode;
+  /** Optional HMAC-SHA256 signing secret (X-RedOps-Signature / X-RedOps-Timestamp). */
+  signing_secret: string;
 }
 
 export interface RealOpenAIConfig {
   name: string;
   base_url: string;
+  /** Leave empty to use OPENAI_API_KEY from the backend environment. */
   api_key: string;
   model: string;
   prompt: string;
   system_prompt: string;
-  temperature: number;
+  /** null omits the parameter (needed by some newer models). */
+  temperature: number | null;
   timeout_seconds: number;
+  mode: RealAgentMode;
+}
+
+export type KeyStatus =
+  | 'valid' | 'invalid' | 'quota_exceeded' | 'rate_limited'
+  | 'unverified' | 'unreachable' | 'malformed' | 'error';
+
+export interface KeyCheckResult {
+  status: KeyStatus;
+  ok: boolean;
+  http_status: number | null;
+  message: string;
+  base_url: string;
+  key_hint: string;
+  key_source: 'request' | 'environment' | 'none';
+  model: string;
+  model_available: boolean | null;
+  models_listed: number;
+  latency_ms: number;
+  organization: string;
+  request_id: string;
+}
+
+export interface WebhookVerifyResult {
+  ok: boolean;
+  status: string;
+  message: string;
+  http_status?: number;
+  latency_ms?: number;
+  json_response?: boolean;
+  reply_preview?: string;
+  signed?: boolean;
+}
+
+async function postJson<T>(path: string, body: unknown): Promise<T | null> {
+  try {
+    const res = await fetch(`${BASE}${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) {
+      // FastAPI validation errors arrive as { detail: string }.
+      const detail = data && typeof data.detail === 'string' ? data.detail : `HTTP ${res.status}`;
+      return { ok: false, status: 'error', message: detail } as unknown as T;
+    }
+    return data as T;
+  } catch {
+    return null; // backend unreachable
+  }
+}
+
+/** Check an OpenAI-compatible key against the real API (the key is never echoed back). */
+export function checkOpenAIKey(config: RealOpenAIConfig): Promise<KeyCheckResult | null> {
+  return postJson<KeyCheckResult>('/real-agents/openai/validate-key', {
+    base_url: config.base_url || undefined,
+    api_key: config.api_key,
+    model: config.model,
+  });
+}
+
+/** Send one benign real request to confirm a webhook is reachable. */
+export function verifyWebhook(config: RealWebhookConfig): Promise<WebhookVerifyResult | null> {
+  return postJson<WebhookVerifyResult>('/real-agents/webhook/verify', {
+    url: config.url,
+    method: config.method,
+    headers: config.headers,
+    payload: config.payload,
+    timeout_seconds: config.timeout_seconds,
+    signing_secret: config.signing_secret,
+  });
 }
 
 export function streamRealWebhook(

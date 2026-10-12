@@ -435,7 +435,7 @@ export default function Landing() {
               </a>
             ))}
           </nav>
-          <a href="#/console" className="bg-ink text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-crimson transition-colors">
+          <a href="#/live" className="bg-ink text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-crimson transition-colors">
             Get Started →
           </a>
         </div>
@@ -695,7 +695,7 @@ export default function Landing() {
               },
             ].map((plan) => (
               <Tilt key={plan.name} max={6} scale={1.01} className="h-full">
-                <div className={`panel panel-shadow face-lift p-6 flex flex-col h-[430px] ${plan.name === 'Pro' ? 'border-crimson/45' : ''}`}>
+                <div className={`panel panel-shadow face-lift p-6 flex flex-col h-full min-h-[430px] ${plan.name === 'Pro' ? 'border-crimson/45' : ''}`}>
                   <div className="flex items-start justify-between gap-3">
                     <h3 className="font-display text-xl text-ink">{plan.name}</h3>
                     {plan.name === 'Pro' && (
@@ -709,7 +709,7 @@ export default function Landing() {
                     {plan.suffix && <span className="text-xs text-muted">{plan.suffix}</span>}
                   </div>
                   <p className="mt-3 min-h-[3.5rem] text-sm text-muted leading-relaxed">{plan.audience}</p>
-                  <ul className="mt-6 min-h-[144px] space-y-3 border-t border-line pt-5 text-sm text-muted">
+                  <ul className="mt-6 flex-1 min-h-[144px] space-y-3 border-t border-line pt-5 text-sm text-muted">
                     {plan.features.map((feature) => (
                       <li key={feature} className="flex gap-2">
                         <span className="text-crimson">✓</span>
@@ -717,9 +717,21 @@ export default function Landing() {
                       </li>
                     ))}
                   </ul>
-                  <a href="#/console" className="btn-secondary mt-7 w-full justify-center">
-                    {plan.name === 'Enterprise' ? 'Talk to us' : plan.name === 'Community' ? 'Start free' : 'Explore plan'} <ArrowRight />
-                  </a>
+                  <div className="mt-7">
+                    {plan.name === 'Community' ? (
+                      <a href="#/console" className="btn-secondary w-full justify-center">
+                        Start free <ArrowRight />
+                      </a>
+                    ) : plan.name === 'Enterprise' ? (
+                      <a href="mailto:vkowdiki@gmail.com?subject=RedOps%20Enterprise%20enquiry" className="btn-secondary w-full justify-center">
+                        Talk to us <ArrowRight />
+                      </a>
+                    ) : (
+                      <a href="mailto:vkowdiki@gmail.com?subject=RedOps%20Pro%20plan%20—%20early%20access" className="btn-secondary w-full justify-center">
+                        Join waitlist <ArrowRight />
+                      </a>
+                    )}
+                  </div>
                 </div>
               </Tilt>
             ))}
@@ -744,7 +756,7 @@ export default function Landing() {
               AI agents can do more — when you know where they break. RedOps gives you the visibility and tools to
               build safer, more resilient systems.
             </p>
-            <a href="#/console" className="btn-primary mt-6">
+            <a href="#/live" className="btn-primary mt-6">
               Get Started <ArrowRight />
             </a>
           </div>
@@ -789,7 +801,7 @@ export default function Landing() {
               <div className="flex gap-5">
                 <a href="#/docs#trust-model" className="hover:text-ink">Trust model</a>
                 <a href="#/docs#api" className="hover:text-ink">API reference</a>
-                <a href="#/live" className="hover:text-ink">Contact via Live</a>
+                <a href="mailto:vkowdiki@gmail.com" className="hover:text-ink">Contact us</a>
               </div>
             </div>
         </footer>

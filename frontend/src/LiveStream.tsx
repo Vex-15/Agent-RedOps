@@ -8,8 +8,12 @@ import {
   streamAllRuns,
   streamRealWebhook,
   streamRealOpenAI,
+  checkOpenAIKey,
+  verifyWebhook,
   type RealWebhookConfig,
   type RealOpenAIConfig,
+  type KeyCheckResult,
+  type WebhookVerifyResult,
   type ScenarioItem,
   type StreamMessage,
 } from './lib/api';
@@ -22,22 +26,10 @@ import {
 } from './lib/liveState';
 
 function formatLocalTime(timestamp: string): string {
-  const normalized = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(timestamp.trim())
+  const date = new Date(timestamp);
+  return Number.isNaN(date.getTime())
     ? timestamp
-    : `${timestamp.trim()}Z`;
-  const date = new Date(normalized);
-  if (Number.isNaN(date.getTime())) return timestamp;
-
-  const options: Intl.DateTimeFormatOptions = {
-    hour: 'numeric',
-    minute: '2-digit',
-    second: '2-digit',
-  };
-  try {
-    return new Intl.DateTimeFormat(undefined, options).format(date);
-  } catch {
-    return new Intl.DateTimeFormat('en-IN', { ...options, timeZone: 'Asia/Kolkata' }).format(date);
-  }
+    : date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', second: '2-digit' });
 }
 
 /**
@@ -216,18 +208,27 @@ export default function LiveStream() {
     url: '',
     method: 'POST',
     headers: {},
-    payload: { message: 'Run a security self-check and return your decision.' },
+    payload: { message: '{{PROMPT}}' },
     timeout_seconds: 30,
+    mode: 'probes',
+    signing_secret: '',
   });
+  const [payloadText, setPayloadText] = useState('{\n  "message": "{{PROMPT}}"\n}');
+  const [headersText, setHeadersText] = useState('');
+  const [keyCheck, setKeyCheck] = useState<KeyCheckResult | null>(null);
+  const [hookCheck, setHookCheck] = useState<WebhookVerifyResult | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [inputError, setInputError] = useState('');
   const [openai, setOpenai] = useState<RealOpenAIConfig>({
     name: 'My OpenAI-compatible agent',
-    base_url: '',
+    base_url: 'https://api.openai.com/v1',
     api_key: '',
     model: '',
     prompt: 'Run a security self-check and explain your decision.',
     system_prompt: '',
     temperature: 0,
     timeout_seconds: 60,
+    mode: 'probes',
   });
 
   const abortRef = useRef<AbortController | null>(null);
@@ -285,8 +286,62 @@ export default function LiveStream() {
     if (res.ok) setRunIds(res.runIds);
   };
 
+  /** Parse the raw payload/headers text into a config, or explain what is wrong. */
+  const buildWebhook = (): RealWebhookConfig | null => {
+    let payload: unknown;
+    let headers: Record<string, string> = {};
+    try {
+      payload = JSON.parse(payloadText);
+    } catch {
+      setInputError('Payload is not valid JSON.');
+      return null;
+    }
+    if (headersText.trim()) {
+      try {
+        const parsed = JSON.parse(headersText);
+        if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) throw new Error();
+        headers = parsed as Record<string, string>;
+      } catch {
+        setInputError('Headers must be a JSON object, e.g. {"Authorization": "Bearer …"}.');
+        return null;
+      }
+    }
+    if (webhook.mode === 'probes' && !payloadText.includes('{{PROMPT}}')) {
+      setInputError('Probe mode needs {{PROMPT}} inside the payload — that is where each attack prompt is placed.');
+      return null;
+    }
+    setInputError('');
+    return { ...webhook, payload, headers };
+  };
+
+  const runKeyCheck = async () => {
+    setChecking(true);
+    setKeyCheck(null);
+    const res = await checkOpenAIKey(openai);
+    setKeyCheck(
+      res ?? {
+        status: 'error', ok: false, http_status: null, message: 'Backend unreachable — start the API first.',
+        base_url: openai.base_url, key_hint: '', key_source: 'none', model: openai.model, model_available: null,
+        models_listed: 0, latency_ms: 0, organization: '', request_id: '',
+      },
+    );
+    setChecking(false);
+  };
+
+  const runHookCheck = async () => {
+    const cfg = buildWebhook();
+    if (!cfg) return;
+    setChecking(true);
+    setHookCheck(null);
+    const res = await verifyWebhook(cfg);
+    setHookCheck(res ?? { ok: false, status: 'error', message: 'Backend unreachable — start the API first.' });
+    setChecking(false);
+  };
+
   const startReal = async () => {
     if (running) return;
+    const hookConfig = agentMode === 'webhook' ? buildWebhook() : null;
+    if (agentMode === 'webhook' && !hookConfig) return;
     const controller = new AbortController();
     abortRef.current = controller;
     setRunning(true);
@@ -300,7 +355,7 @@ export default function LiveStream() {
       if (!controller.signal.aborted) setState((prev) => applyStreamMsg(prev, msg));
     };
     const res = agentMode === 'webhook'
-      ? await streamRealWebhook(webhook, onMessage, controller.signal)
+      ? await streamRealWebhook(hookConfig as RealWebhookConfig, onMessage, controller.signal)
       : await streamRealOpenAI(openai, onMessage, controller.signal);
     setRunning(false);
     if (res.ok) setRunIds(res.runIds);
@@ -403,23 +458,65 @@ export default function LiveStream() {
                 <>
                   <input value={webhook.name} onChange={(e) => setWebhook({ ...webhook, name: e.target.value })} placeholder="Agent name" className="field" />
                   <input value={webhook.url} onChange={(e) => setWebhook({ ...webhook, url: e.target.value })} placeholder="https://agent.example/run" className="field" />
-                  <textarea value={JSON.stringify(webhook.payload, null, 2)} onChange={(e) => { try { setWebhook({ ...webhook, payload: JSON.parse(e.target.value) }); } catch { /* wait for valid JSON */ } }} className="field min-h-24 font-mono text-xs md:col-span-2" />
+                  <select value={webhook.mode} onChange={(e) => setWebhook({ ...webhook, mode: e.target.value as RealWebhookConfig['mode'] })} className="field">
+                    <option value="probes">Security probes (6 attacks)</option>
+                    <option value="single">Single request (send payload as-is)</option>
+                  </select>
+                  <input type="password" value={webhook.signing_secret} onChange={(e) => setWebhook({ ...webhook, signing_secret: e.target.value })} placeholder="HMAC signing secret (optional)" className="field" />
+                  <textarea value={payloadText} onChange={(e) => setPayloadText(e.target.value)} spellCheck={false} placeholder='{"message": "{{PROMPT}}"}' className="field min-h-24 font-mono text-xs" />
+                  <textarea value={headersText} onChange={(e) => setHeadersText(e.target.value)} spellCheck={false} placeholder='Headers as JSON, e.g. {"Authorization": "Bearer …"}' className="field min-h-24 font-mono text-xs" />
+                  <div className="md:col-span-2 flex flex-wrap items-center gap-3 text-xs">
+                    <button onClick={() => void runHookCheck()} disabled={!live || checking || running || !webhook.url} className="px-3 py-1.5 rounded-lg border border-line-strong font-medium hover:border-crimson hover:text-crimson disabled:opacity-50">
+                      {checking ? 'Checking…' : 'Verify webhook'}
+                    </button>
+                    {hookCheck && (
+                      <span className={hookCheck.ok ? 'text-emerald-700' : 'text-crimson'}>
+                        {hookCheck.ok ? '✓' : '✗'} {hookCheck.message}
+                        {hookCheck.latency_ms != null && ` (${hookCheck.latency_ms} ms)`}
+                      </span>
+                    )}
+                  </div>
                 </>
               ) : (
                 <>
                   <input value={openai.base_url} onChange={(e) => setOpenai({ ...openai, base_url: e.target.value })} placeholder="https://api.example.com/v1" className="field" />
                   <input value={openai.model} onChange={(e) => setOpenai({ ...openai, model: e.target.value })} placeholder="model name" className="field" />
-                  <input type="password" value={openai.api_key} onChange={(e) => setOpenai({ ...openai, api_key: e.target.value })} placeholder="API key (sent only to backend)" className="field" />
-                  <textarea value={openai.prompt} onChange={(e) => setOpenai({ ...openai, prompt: e.target.value })} placeholder="Prompt" className="field min-h-24" />
+                  <input type="password" value={openai.api_key} onChange={(e) => setOpenai({ ...openai, api_key: e.target.value })} placeholder="API key (blank = server OPENAI_API_KEY)" className="field" />
+                  <select value={openai.mode} onChange={(e) => setOpenai({ ...openai, mode: e.target.value as RealOpenAIConfig['mode'] })} className="field">
+                    <option value="probes">Security probes (6 attacks)</option>
+                    <option value="single">Single request (your prompt)</option>
+                  </select>
+                  <label className="field flex items-center gap-2 text-xs text-muted">
+                    <input type="checkbox" checked={openai.temperature === null} onChange={(e) => setOpenai({ ...openai, temperature: e.target.checked ? null : 0 })} />
+                    Omit temperature (gpt-5 / o-series)
+                  </label>
+                  <textarea value={openai.system_prompt} onChange={(e) => setOpenai({ ...openai, system_prompt: e.target.value })} placeholder="Your agent's system prompt (optional)" className="field min-h-24" />
+                  <textarea value={openai.prompt} onChange={(e) => setOpenai({ ...openai, prompt: e.target.value })} placeholder="Prompt (single-request mode)" className="field min-h-24" disabled={openai.mode === 'probes'} />
+                  <div className="md:col-span-2 flex flex-wrap items-center gap-3 text-xs">
+                    <button onClick={() => void runKeyCheck()} disabled={!live || checking || running} className="px-3 py-1.5 rounded-lg border border-line-strong font-medium hover:border-crimson hover:text-crimson disabled:opacity-50">
+                      {checking ? 'Checking…' : 'Check API key'}
+                    </button>
+                    {keyCheck && (
+                      <span className={keyCheck.ok ? 'text-emerald-700' : 'text-crimson'}>
+                        {keyCheck.ok ? '✓' : '✗'} {keyCheck.message}
+                        {keyCheck.key_hint && ` · key ${keyCheck.key_hint}${keyCheck.key_source === 'environment' ? ' (server env)' : ''}`}
+                        {keyCheck.latency_ms ? ` · ${keyCheck.latency_ms} ms` : ''}
+                      </span>
+                    )}
+                  </div>
                 </>
               )}
             </div>
           )}
           {agentMode !== 'demo' && (
             <div className="flex items-center justify-between gap-4 mb-5 text-xs text-muted">
-              <span>RedOps will show a tested result only after the configured endpoint returns a real response.</span>
+              <span>
+                {inputError
+                  ? <span className="text-crimson">{inputError}</span>
+                  : 'RedOps shows a tested result only after the endpoint returns real responses. Keys stay on the backend and never appear in traces.'}
+              </span>
               <button onClick={() => void startReal()} disabled={!live || running} className="btn-primary sheen disabled:opacity-50">
-                ▶ Send real request
+                ▶ {(agentMode === 'webhook' ? webhook.mode : openai.mode) === 'probes' ? 'Run security probes' : 'Send real request'}
               </button>
             </div>
           )}
@@ -651,7 +748,6 @@ export default function LiveStream() {
               </div>
             </div>
           </div>
-
         </div>
       </section>
 
