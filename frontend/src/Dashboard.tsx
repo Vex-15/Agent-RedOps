@@ -37,10 +37,22 @@ function SourceBadge({ source }: { source?: string }) {
 }
 
 function formatLocalTime(timestamp: string): string {
-  const date = new Date(timestamp);
-  return Number.isNaN(date.getTime())
+  const normalized = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(timestamp.trim())
     ? timestamp
-    : date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', second: '2-digit' });
+    : `${timestamp.trim()}Z`;
+  const date = new Date(normalized);
+  if (Number.isNaN(date.getTime())) return timestamp;
+
+  const options: Intl.DateTimeFormatOptions = {
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit',
+  };
+  try {
+    return new Intl.DateTimeFormat(undefined, options).format(date);
+  } catch {
+    return new Intl.DateTimeFormat('en-IN', { ...options, timeZone: 'Asia/Kolkata' }).format(date);
+  }
 }
 
 // ── Report export ──────────────────────────────────────────────────────

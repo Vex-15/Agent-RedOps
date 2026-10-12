@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Logo from './components/Logo';
 import { Badge } from './components/Badge';
-import { Reveal, Tilt, LayerStack } from './components/Motion';
+import { Tilt } from './components/Motion';
 import {
   getScenarios,
   streamScenarioRun,
@@ -22,10 +22,22 @@ import {
 } from './lib/liveState';
 
 function formatLocalTime(timestamp: string): string {
-  const date = new Date(timestamp);
-  return Number.isNaN(date.getTime())
+  const normalized = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(timestamp.trim())
     ? timestamp
-    : date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', second: '2-digit' });
+    : `${timestamp.trim()}Z`;
+  const date = new Date(normalized);
+  if (Number.isNaN(date.getTime())) return timestamp;
+
+  const options: Intl.DateTimeFormatOptions = {
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit',
+  };
+  try {
+    return new Intl.DateTimeFormat(undefined, options).format(date);
+  } catch {
+    return new Intl.DateTimeFormat('en-IN', { ...options, timeZone: 'Asia/Kolkata' }).format(date);
+  }
 }
 
 /**
@@ -640,17 +652,6 @@ export default function LiveStream() {
             </div>
           </div>
 
-          {/* Idle illustration */}
-          {state.events.length === 0 && !running && (
-            <Reveal>
-              <div className="panel panel-shadow p-6 text-center">
-                <LayerStack className="mb-2" />
-                <p className="text-[11px] text-muted font-mono">
-                  trace → findings → verified fixes
-                </p>
-              </div>
-            </Reveal>
-          )}
         </div>
       </section>
 
