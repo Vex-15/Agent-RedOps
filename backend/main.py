@@ -298,7 +298,6 @@ def execute_scenario(scenario_id: int, db: Session = Depends(get_db)):
         "expected_violations": scenario_rec.expected_violations or [],
         "expected_outcome": scenario_rec.expected_outcome,
     }
-
     result = run_scenario(scenario_dict)
     _save_run(db, result)
 
